@@ -137,13 +137,13 @@ const TCODashboard = () => {
       outputNeu += dt * hoursPerYear * hubeProStundeNeu * qualityFactor * performanceFactor;
 
       tcoData.push({
-        time: parseFloat(currentTime.toFixed(3)),
-        tcoReman: Math.round(tcoReman),
-        tcoNeu: Math.round(tcoNeu),
-        outputReman: Math.round(outputReman),
-        outputNeu: Math.round(outputNeu),
-        costPerOutputReman: outputReman > 0 ? parseFloat(((tcoReman / outputReman) * 100).toFixed(4)) : 0,
-        costPerOutputNeu: outputNeu > 0 ? parseFloat(((tcoNeu / outputNeu) * 100).toFixed(4)) : 0,
+        time: currentTime,
+        tcoReman: tcoReman,
+        tcoNeu: tcoNeu,
+        outputReman: outputReman,
+        outputNeu: outputNeu,
+        costPerOutputReman: outputReman > 0 ? (tcoReman / outputReman) * 100 : 0,
+        costPerOutputNeu: outputNeu > 0 ? (tcoNeu / outputNeu) * 100 : 0,
         isRemanEvent,
         isNeukaufEvent
       });
@@ -190,21 +190,17 @@ const TCODashboard = () => {
     setParams(prev => ({ ...prev, [key]: parseFloat(value) || 0 }));
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  };
+  const formatCurrency = (value) => new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(value);
 
-  const formatNumber = (value, decimals = 0) => {
-    return new Intl.NumberFormat('de-DE', {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals
-    }).format(value);
-  };
+  const formatNumber = (value, decimals = 0) => new Intl.NumberFormat('de-DE', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  }).format(value);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -532,4 +528,16 @@ const TCODashboard = () => {
                 { name: 'REMAN', value: calculations.singleCostComparison.reman }
               ]}>
                 <XAxis dataKey="name" />
-                <YAxis tick
+                <YAxis tickFormatter={(value) => formatNumber(value/1000) + 'k'} />
+                <Tooltip formatter={(value) => [formatCurrency(value), 'Gesamtkosten']} />
+                <Bar dataKey="value" fill="#8b5cf6" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default TCODashboard;
