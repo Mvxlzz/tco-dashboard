@@ -714,10 +714,10 @@ export default function TCODashboard() {
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data=[
+              <BarChart data={[
                 { name: 'Neuteil', value: calculations.co2Comparison.neu },
                 { name: 'REMAN', value: calculations.co2Comparison.reman }
-              ]>
+              ]}>
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip formatter={(v) => [`${formatNumber(Number(v), 0)} €/t`, 'CO₂-Kosten']} />
@@ -734,10 +734,10 @@ export default function TCODashboard() {
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data=[
+              <BarChart data={[
                 { name: 'Neuteil', value: calculations.leadTimeComparison.neu },
                 { name: 'REMAN', value: calculations.leadTimeComparison.reman }
-              ]>
+              ]}>
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip formatter={(v) => [`${formatNumber(Number(v), 0)} Tage`, 'Lead Time']} />
@@ -754,10 +754,10 @@ export default function TCODashboard() {
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data=[
+              <BarChart data={[
                 { name: 'Neuteil', value: calculations.recyclingComparison.neu },
                 { name: 'REMAN', value: calculations.recyclingComparison.reman }
-              ]>
+              ]}>
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(v) => formatNumber(Number(v) / 1000) + ' k'} />
                 <Tooltip formatter={(v) => [formatCurrency(Number(v)), 'Entsorgung']} />
@@ -774,10 +774,10 @@ export default function TCODashboard() {
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data=[
+              <BarChart data={[
                 { name: 'Neuteil', value: calculations.neuteilVsReman.neu },
                 { name: 'REMAN', value: calculations.neuteilVsReman.reman }
-              ]>
+              ]}>
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(v) => formatNumber(Number(v) / 1000) + ' k'} />
                 <Tooltip formatter={(v) => [formatCurrency(Number(v)), 'Summe']} />
