@@ -180,7 +180,7 @@ export default function TCODashboard() {
 
       // OPEX am Jahresende – Diskontsatzwechsel ab erstem REMAN-Event
       if (Math.abs(t1 - Math.round(t1)) <= EPS && t1 >= 1 - EPS && t1 <= p.analysehorizont + EPS) {
-        const discR = (t1 + EPS < firstReman) ? rNeu : rRem; // <- Fix: Gleichheit auf REMAN-Seite
+        const discR = (t1 + EPS < firstReman) ? rNeu : rRem; // Fix
         tcoReman += pv(p.betriebskosten, discR, t1);
         tcoNeu += pv(p.betriebskosten, rNeu, t1);
       }
@@ -233,11 +233,11 @@ export default function TCODashboard() {
       });
     }
 
-    // ===== Fix A: Entsorgung IMMER am Horizont buchen (VBA-Style) =====
+    // Entsorgung IMMER am Horizont (VBA-Style)
     tcoReman += pv(p.entsorgungReman, rRem, p.analysehorizont);
     tcoNeu   += pv(p.entsorgungNeu,   rNeu, p.analysehorizont);
 
-    // letzten Punkt (falls vorhanden) anpassen, damit Charts/KPIs Endwerte zeigen
+    // letzten Punkt updaten
     if (data.length) {
       const last = data[data.length - 1];
       last.tcoReman = tcoReman;
@@ -337,17 +337,28 @@ export default function TCODashboard() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* Header mit Logo rechts */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex items-center space-x-3 mb-2">
-            <Calculator className="h-8 w-8 text-blue-600" />
-            <h1 className="text-3xl font-bold text-gray-900">
-              TCO-Analyse: REMAN vs. Neuteil
-            </h1>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center space-x-3 mb-2">
+                <Calculator className="h-8 w-8 text-blue-600" />
+                <h1 className="text-3xl font-bold text-gray-900">
+                  TCO-Analyse: REMAN vs. Neuteil
+                </h1>
+              </div>
+              <p className="text-sm text-gray-600">
+                Δ zeigt jeweils den Unterschied REMAN − Neuteil.
+              </p>
+            </div>
+
+            {/* <img> lädt aus /public */}
+            <img
+              src="/logo.png"
+              alt="Logo"
+              className="h-10 w-auto object-contain opacity-90"
+            />
           </div>
-          <p className="text-sm text-gray-600">
-            Δ zeigt jeweils den Unterschied REMAN − Neuteil.
-          </p>
         </div>
 
         {/* Eingaben */}
