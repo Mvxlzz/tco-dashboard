@@ -220,7 +220,7 @@ export default function TCODashboard() {
     // REMAN
     remanKosten: 40000,
     entsorgungReman: -1000,
-    co2KostenReman: 200,
+    co2KostenReman: 1000,
     kostensteigerungJeReman: -2.0,
     distanzReman: 200,
 
