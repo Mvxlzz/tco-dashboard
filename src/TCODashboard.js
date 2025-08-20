@@ -237,7 +237,7 @@ export default function TCODashboard() {
 
     // Allgemein
     analysehorizont: 20,
-    stundenProJahr: 4100,
+    stundenProJahr: 1760,
     qualitaetsYield: 97,
     performanceYield: 95,
     inflation: 2.0,
