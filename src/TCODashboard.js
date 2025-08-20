@@ -51,8 +51,8 @@ export default function TCODashboard() {
   );
 
   // ===== Fokus-/Caret-Keeper =====
-  const inputRefs = useRef({});          // Map: key -> HTMLInputElement
-  const activeKeyRef = useRef(null);     // aktuell fokussiertes Feld
+  const inputRefs = useRef({});
+  const activeKeyRef = useRef(null);
   const caretRef = useRef({ start: null, end: null });
 
   const setInputRef = (key, el) => {
@@ -60,7 +60,6 @@ export default function TCODashboard() {
   };
 
   const updateForm = (key, next, e) => {
-    // Caret merken, damit er nicht springt
     if (e?.target) {
       try {
         caretRef.current = {
@@ -70,7 +69,7 @@ export default function TCODashboard() {
       } catch {}
     }
     setForm(prev => ({ ...prev, [key]: next }));
-    activeKeyRef.current = key; // merken, welches Feld aktiv ist
+    activeKeyRef.current = key;
   };
 
   const restoreFocus = useCallback(() => {
@@ -89,7 +88,6 @@ export default function TCODashboard() {
   }, []);
 
   useEffect(() => {
-    // nach JEDEM Render Fokus/Caret wiederherstellen (wenn wir tippen)
     restoreFocus();
   });
 
@@ -216,7 +214,6 @@ export default function TCODashboard() {
       const effProdRem = Math.max(0, Math.min(t1, prodEndR) - Math.max(t0, prodStartR));
       outRem += effProdRem * H * rateRem * q * perf;
 
-      // NEU-Szenario
       let idxN = -1;
       for (let j = 0; j < neukaufTimes.length; j++) if (neukaufTimes[j] <= t0 + 1e-6) idxN = j;
 
@@ -242,6 +239,8 @@ export default function TCODashboard() {
       if (Math.abs(last.time - p.analysehorizont) <= 1e-6) {
         last.tcoReman += pv(p.entsorgungReman, rRem, p.analysehorizont);
         last.tcoNeu += pv(p.entsorgungNeu, rNeu, p.analysehorizont);
+        last.costPerOutputReman = last.tcoReman / (outRem || 1) * 100;
+        last.costPerOutputNeu   = last.tcoNeu   / (outNeu || 1) * 100;
       }
     }
 
@@ -250,6 +249,12 @@ export default function TCODashboard() {
     const finalTcoNeu = finalPoint.tcoNeu || 0;
     const savings = finalTcoNeu - finalTcoReman;
     const savingsPercent = finalTcoNeu > 0 ? (savings / finalTcoNeu) * 100 : 0;
+
+    // Kosten/Hub KPIs (Cent)
+    const kphReman = finalPoint.costPerOutputReman || 0;
+    const kphNeu   = finalPoint.costPerOutputNeu   || 0;
+    const kphDelta = kphReman - kphNeu;
+    const kphDeltaPct = kphNeu !== 0 ? (kphDelta / kphNeu) * 100 : 0;
 
     // Mini-Charts: Werte + Deltas
     const co2NeuNow = p.co2KostenNeu;
@@ -269,6 +274,12 @@ export default function TCODashboard() {
       finalTcoNeu,
       savings,
       savingsPercent,
+      // Kosten/Hub KPIs
+      kphReman,
+      kphNeu,
+      kphDelta,
+      kphDeltaPct,
+      // Mini-Kacheln
       leadTimeComparison: { neu: p.leadTimeNeu, reman: p.leadTimeReman, delta: leadDelta },
       co2Comparison: { neu: co2NeuNow, reman: co2RemNow, delta: co2Delta },
       recyclingComparison: { neu: p.entsorgungNeu, reman: p.entsorgungReman, delta: entsorgDelta },
@@ -284,8 +295,8 @@ export default function TCODashboard() {
         <input
           ref={(el) => setInputRef(name, el)}
           name={name}
-          type="text"                 // vermeidet Cursor-Sprünge
-          inputMode="decimal"         // mobile Zahlentastatur
+          type="text"
+          inputMode="decimal"
           autoComplete="off"
           value={value}
           onFocus={() => { activeKeyRef.current = name; }}
@@ -308,7 +319,7 @@ export default function TCODashboard() {
     </div>
   );
 
-  // Hilfs-Renderer fürs Input (spart Tipparbeit)
+  // Hilfs-Renderer fürs Input
   const F = (name, label) => (
     <InputField
       key={name}
@@ -337,7 +348,7 @@ export default function TCODashboard() {
           </p>
         </div>
 
-        {/* Eingaben – neu gruppiert */}
+        {/* Eingaben */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <Section icon={Factory} title="Parameter Neuteil">
             {F('herstellkosten', 'Herstellkosten (€)')}
@@ -374,7 +385,7 @@ export default function TCODashboard() {
           </Section>
         </div>
 
-        {/* KPI-Kacheln */}
+        {/* KPI-Kacheln (TCO) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow-sm p-4">
             <p className="text-xs font-medium text-gray-600">TCO REMAN</p>
@@ -394,6 +405,30 @@ export default function TCODashboard() {
             <p className="text-xs font-medium text-gray-600">Einsparung %</p>
             <p className={`text-xl font-bold ${calculations.savings > 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatNumber(calculations.savingsPercent, 1)}%
+            </p>
+          </div>
+        </div>
+
+        {/* KPI-Kacheln (Kosten je Hub) */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">Kosten/Hub REMAN</p>
+            <p className="text-xl font-bold text-green-600">{formatNumber(calculations.kphReman, 2)} Cent</p>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">Kosten/Hub Neuteil</p>
+            <p className="text-xl font-bold text-blue-600">{formatNumber(calculations.kphNeu, 2)} Cent</p>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">Δ Kosten/Hub</p>
+            <p className={`text-xl font-bold ${calculations.kphDelta <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatNumber(calculations.kphDelta, 2)} Cent
+            </p>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">Δ Kosten/Hub %</p>
+            <p className={`text-xl font-bold ${calculations.kphDeltaPct <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatNumber(calculations.kphDeltaPct, 1)}%
             </p>
           </div>
         </div>
