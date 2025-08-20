@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback, memo } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   BarChart, Bar, ResponsiveContainer
@@ -45,15 +45,53 @@ export default function TCODashboard() {
     co2Steigerung: 4.0               // % p.a.
   });
 
-  // ===== String-Formzustand für komfortable Eingabe =====
+  // ===== String-Formzustand (nur Anzeige/Eingabe) =====
   const [form, setForm] = useState(() =>
     Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
   );
 
-  // Nur sichtbare Strings updaten (kein Re-Render der Charts)
-  const updateForm = (key, next) => {
-    setForm(prev => ({ ...prev, [key]: next }));
+  // ===== Fokus-/Caret-Keeper =====
+  const inputRefs = useRef({});          // Map: key -> HTMLInputElement
+  const activeKeyRef = useRef(null);     // aktuell fokussiertes Feld
+  const caretRef = useRef({ start: null, end: null });
+
+  const setInputRef = (key, el) => {
+    if (el) inputRefs.current[key] = el;
   };
+
+  const updateForm = (key, next, e) => {
+    // Caret merken, damit er nicht springt
+    if (e?.target) {
+      try {
+        caretRef.current = {
+          start: e.target.selectionStart,
+          end: e.target.selectionEnd
+        };
+      } catch {}
+    }
+    setForm(prev => ({ ...prev, [key]: next }));
+    activeKeyRef.current = key; // merken, welches Feld aktiv ist
+  };
+
+  const restoreFocus = useCallback(() => {
+    const key = activeKeyRef.current;
+    if (!key) return;
+    const el = inputRefs.current[key];
+    if (!el) return;
+
+    if (document.activeElement !== el) {
+      el.focus({ preventScroll: true });
+    }
+    const { start, end } = caretRef.current || {};
+    if (start != null && end != null) {
+      try { el.setSelectionRange(start, end); } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    // nach JEDEM Render Fokus/Caret wiederherstellen (wenn wir tippen)
+    restoreFocus();
+  });
 
   // Commit: String -> Number (bei Blur/Enter)
   const commitParam = (key) => {
@@ -70,6 +108,7 @@ export default function TCODashboard() {
   const formatNumber = (value, decimals = 0) =>
     new Intl.NumberFormat('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
 
+  // ====== Berechnungen nur wenn params sich ändern ======
   const calculations = useMemo(() => {
     const p = params;
     const EPS = 1e-6;
@@ -113,21 +152,21 @@ export default function TCODashboard() {
     // Timeline: 0, Jahresenden, (fractionales Endjahr), Events, Produktions-Endpunkte
     const TL = [0];
     for (let j = 1; j <= Math.floor(p.analysehorizont); j++) TL.push(j);
-    if (Math.abs(p.analysehorizont - Math.floor(p.analysehorizont)) > EPS) TL.push(p.analysehorizont);
+    if (Math.abs(p.analysehorizont - Math.floor(p.analysehorizont)) > 1e-6) TL.push(p.analysehorizont);
     TL.push(...remanTimes, ...neukaufTimes);
 
     // Produktions-Endpunkte wie in VBA (für Output-Genauigkeit)
     TL.push(standzeitNeuJ);
     remanTimes.forEach(t => TL.push(t + standzeitRemanJ));
 
-    // sort & unique (mit EPS)
+    // sort & unique
     TL.sort((a, b) => a - b);
     const uniqueTL = [];
     for (let i = 0; i < TL.length; i++) {
-      if (i === 0 || Math.abs(TL[i] - TL[i - 1]) > EPS) uniqueTL.push(TL[i]);
+      if (i === 0 || Math.abs(TL[i] - TL[i - 1]) > 1e-6) uniqueTL.push(TL[i]);
     }
 
-    let tcoReman = p.herstellkosten + p.inbetriebnahme; // Startinvest
+    let tcoReman = p.herstellkosten + p.inbetriebnahme;
     let tcoNeu = p.herstellkosten + p.inbetriebnahme;
     let outRem = 0, outNeu = 0;
 
@@ -141,30 +180,29 @@ export default function TCODashboard() {
       const t1 = uniqueTL[i];
       const t0 = i > 0 ? uniqueTL[i - 1] : 0;
 
-      // OPEX am Jahresende (wie VBA)
-      if (Math.abs(t1 - Math.round(t1)) <= EPS && t1 >= 1 - EPS && t1 <= p.analysehorizont + EPS) {
-        const discR = t1 < firstReman - EPS ? rNeu : rRem;
+      // OPEX am Jahresende
+      if (Math.abs(t1 - Math.round(t1)) <= 1e-6 && t1 >= 1 - 1e-6 && t1 <= p.analysehorizont + 1e-6) {
+        const discR = t1 < firstReman - 1e-6 ? rNeu : rRem;
         tcoReman += pv(p.betriebskosten, discR, t1);
         tcoNeu += pv(p.betriebskosten, rNeu, t1);
       }
 
-      // REMAN-Event: lineare Eskalation je Zyklus (NICHT pro Jahr!)
-      if (remanTimes.some(rt => Math.abs(rt - t1) <= EPS)) {
-        const k = remanTimes.findIndex(rt => Math.abs(rt - t1) <= EPS) + 1;
+      // REMAN-Event
+      if (remanTimes.some(rt => Math.abs(rt - t1) <= 1e-6)) {
+        const k = remanTimes.findIndex(rt => Math.abs(rt - t1) <= 1e-6) + 1;
         const mult = 1 + (k - 1) * (p.kostensteigerungJeReman / 100);
         const co2R = tCo2Rem * (p.co2KostenReman * Math.pow(1 + p.co2Steigerung / 100, t1));
         tcoReman += pv(p.remanKosten * mult + co2R, rRem, t1);
       }
 
-      // Neukauf-Event (Neuteil ersetzt Neuteil)
-      if (neukaufTimes.some(nt => Math.abs(nt - t1) <= EPS)) {
+      // Neukauf-Event
+      if (neukaufTimes.some(nt => Math.abs(nt - t1) <= 1e-6)) {
         const co2N = tCo2Neu * (p.co2KostenNeu * Math.pow(1 + p.co2Steigerung / 100, t1));
         tcoNeu += pv(p.entsorgungNeu, rNeu, t1);
         tcoNeu += pv(p.herstellkosten + p.inbetriebnahme + co2N, rNeu, t1);
       }
 
-      // Output-Fenster (produktiv ja, Lead nein)
-      // REMAN-Szenario: vor erstem REMAN = Neuteil-Rate, danach REMAN-Rate
+      // Output-Zeitfenster
       let idxR = -1;
       for (let j = 0; j < remanTimes.length; j++) if (remanTimes[j] <= t0 + 1e-6) idxR = j;
 
@@ -201,7 +239,7 @@ export default function TCODashboard() {
     // Entsorgung am Horizontende
     if (data.length) {
       const last = data[data.length - 1];
-      if (Math.abs(last.time - p.analysehorizont) <= EPS) {
+      if (Math.abs(last.time - p.analysehorizont) <= 1e-6) {
         last.tcoReman += pv(p.entsorgungReman, rRem, p.analysehorizont);
         last.tcoNeu += pv(p.entsorgungNeu, rNeu, p.analysehorizont);
       }
@@ -221,7 +259,6 @@ export default function TCODashboard() {
     const leadDelta = p.leadTimeReman - p.leadTimeNeu;
     const entsorgDelta = p.entsorgungReman - p.entsorgungNeu;
 
-    // "Gesamtkosten" (statisch, nicht diskontiert) – nur zur schnellen Übersicht
     const totalNeuStatic = p.herstellkosten + p.inbetriebnahme + p.betriebskosten + p.entsorgungNeu + p.co2KostenNeu;
     const totalRemStatic = p.remanKosten + p.entsorgungReman + p.co2KostenReman;
     const totalDelta = totalRemStatic - totalNeuStatic;
@@ -232,7 +269,6 @@ export default function TCODashboard() {
       finalTcoNeu,
       savings,
       savingsPercent,
-      // Mini-Kacheln
       leadTimeComparison: { neu: p.leadTimeNeu, reman: p.leadTimeReman, delta: leadDelta },
       co2Comparison: { neu: co2NeuNow, reman: co2RemNow, delta: co2Delta },
       recyclingComparison: { neu: p.entsorgungNeu, reman: p.entsorgungReman, delta: entsorgDelta },
@@ -240,21 +276,27 @@ export default function TCODashboard() {
     };
   }, [params]);
 
-  // ===== Eingabefeld (string-basiert, commit bei Blur/Enter) =====
-  const InputField = ({ label, value, onChange, onCommit }) => (
-    <div>
-      <label className="block text-xs font-medium text-gray-700">{label}</label>
-      <input
-        type="text"                       // vermeidet Cursor-Sprünge
-        inputMode="decimal"               // mobile Zahlentastatur
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onCommit}
-        onKeyDown={(e) => { if (e.key === 'Enter') onCommit(); }}
-        className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-      />
-    </div>
-  );
+  // ===== Eingabefeld (string-basiert) – mit Fokus-Stabilisierung =====
+  const InputField = memo(function InputField({ name, label, value, onChange, onCommit }) {
+    return (
+      <div>
+        <label className="block text-xs font-medium text-gray-700">{label}</label>
+        <input
+          ref={(el) => setInputRef(name, el)}
+          name={name}
+          type="text"                 // vermeidet Cursor-Sprünge
+          inputMode="decimal"         // mobile Zahlentastatur
+          autoComplete="off"
+          value={value}
+          onFocus={() => { activeKeyRef.current = name; }}
+          onChange={(e) => onChange(e.target.value, e)}
+          onBlur={() => { onCommit(); activeKeyRef.current = null; }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { onCommit(); e.currentTarget.blur(); } }}
+          className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+    );
+  });
 
   const Section = ({ icon: Icon, title, children }) => (
     <div className="bg-white rounded-lg shadow-sm p-4">
@@ -266,6 +308,19 @@ export default function TCODashboard() {
     </div>
   );
 
+  // Hilfs-Renderer fürs Input (spart Tipparbeit)
+  const F = (name, label) => (
+    <InputField
+      key={name}
+      name={name}
+      label={label}
+      value={form[name]}
+      onChange={(v, e) => updateForm(name, v, e)}
+      onCommit={() => commitParam(name)}
+    />
+  );
+
+  // ===== Darstellung =====
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -285,37 +340,37 @@ export default function TCODashboard() {
         {/* Eingaben – neu gruppiert */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <Section icon={Factory} title="Parameter Neuteil">
-            <InputField label="Herstellkosten (€)" value={form.herstellkosten} onChange={(v) => updateForm('herstellkosten', v)} onCommit={() => commitParam('herstellkosten')} />
-            <InputField label="Inbetriebnahmekosten (€)" value={form.inbetriebnahme} onChange={(v) => updateForm('inbetriebnahme', v)} onCommit={() => commitParam('inbetriebnahme')} />
-            <InputField label="Betriebskosten/Jahr (auch REMAN) (€)" value={form.betriebskosten} onChange={(v) => updateForm('betriebskosten', v)} onCommit={() => commitParam('betriebskosten')} />
-            <InputField label="Verschrottungserlöse/-Kosten (€)" value={form.entsorgungNeu} onChange={(v) => updateForm('entsorgungNeu', v)} onCommit={() => commitParam('entsorgungNeu')} />
-            <InputField label="CO₂-Kosten (€/t)" value={form.co2KostenNeu} onChange={(v) => updateForm('co2KostenNeu', v)} onCommit={() => commitParam('co2KostenNeu')} />
-            <InputField label="Standzeit Neuteil (Tage)" value={form.standzeitNeu} onChange={(v) => updateForm('standzeitNeu', v)} onCommit={() => commitParam('standzeitNeu')} />
-            <InputField label="Wiederbeschaffungszeit (Tage)" value={form.leadTimeNeu} onChange={(v) => updateForm('leadTimeNeu', v)} onCommit={() => commitParam('leadTimeNeu')} />
-            <InputField label="Diskontzins Neuteil (%)" value={form.zinssatzNeu} onChange={(v) => updateForm('zinssatzNeu', v)} onCommit={() => commitParam('zinssatzNeu')} />
-            <InputField label="Lastzyklen je Stunde (Hübe/h)" value={form.hubeProStundeNeu} onChange={(v) => updateForm('hubeProStundeNeu', v)} onCommit={() => commitParam('hubeProStundeNeu')} />
-            <InputField label="Distanz (km)" value={form.distanzNeu} onChange={(v) => updateForm('distanzNeu', v)} onCommit={() => commitParam('distanzNeu')} />
+            {F('herstellkosten', 'Herstellkosten (€)')}
+            {F('inbetriebnahme', 'Inbetriebnahmekosten (€)')}
+            {F('betriebskosten', 'Betriebskosten/Jahr (auch REMAN) (€)')}
+            {F('entsorgungNeu', 'Verschrottungserlöse/-Kosten (€)')}
+            {F('co2KostenNeu', 'CO₂-Kosten (€/t)')}
+            {F('standzeitNeu', 'Standzeit Neuteil (Tage)')}
+            {F('leadTimeNeu', 'Wiederbeschaffungszeit (Tage)')}
+            {F('zinssatzNeu', 'Diskontzins Neuteil (%)')}
+            {F('hubeProStundeNeu', 'Lastzyklen je Stunde (Hübe/h)')}
+            {F('distanzNeu', 'Distanz (km)')}
           </Section>
 
           <Section icon={Recycle} title="Parameter REMAN">
-            <InputField label="Kosten je Aufbereitung (€)" value={form.remanKosten} onChange={(v) => updateForm('remanKosten', v)} onCommit={() => commitParam('remanKosten')} />
-            <InputField label="Verschrottungserlöse/-Kosten (€)" value={form.entsorgungReman} onChange={(v) => updateForm('entsorgungReman', v)} onCommit={() => commitParam('entsorgungReman')} />
-            <InputField label="CO₂-Kosten (€/t)" value={form.co2KostenReman} onChange={(v) => updateForm('co2KostenReman', v)} onCommit={() => commitParam('co2KostenReman')} />
-            <InputField label="Standzeit REMAN (Tage)" value={form.standzeitReman} onChange={(v) => updateForm('standzeitReman', v)} onCommit={() => commitParam('standzeitReman')} />
-            <InputField label="Wiederbeschaffungszeit (Tage)" value={form.leadTimeReman} onChange={(v) => updateForm('leadTimeReman', v)} onCommit={() => commitParam('leadTimeReman')} />
-            <InputField label="Diskontzins REMAN (%)" value={form.zinssatzReman} onChange={(v) => updateForm('zinssatzReman', v)} onCommit={() => commitParam('zinssatzReman')} />
-            <InputField label="Lastzyklen je Stunde (Hübe/h)" value={form.hubeProStundeReman} onChange={(v) => updateForm('hubeProStundeReman', v)} onCommit={() => commitParam('hubeProStundeReman')} />
-            <InputField label="Kostensteigerung je REMAN (%)" value={form.kostensteigerungJeReman} onChange={(v) => updateForm('kostensteigerungJeReman', v)} onCommit={() => commitParam('kostensteigerungJeReman')} />
-            <InputField label="Distanz (km)" value={form.distanzReman} onChange={(v) => updateForm('distanzReman', v)} onCommit={() => commitParam('distanzReman')} />
+            {F('remanKosten', 'Kosten je Aufbereitung (€)')}
+            {F('entsorgungReman', 'Verschrottungserlöse/-Kosten (€)')}
+            {F('co2KostenReman', 'CO₂-Kosten (€/t)')}
+            {F('standzeitReman', 'Standzeit REMAN (Tage)')}
+            {F('leadTimeReman', 'Wiederbeschaffungszeit (Tage)')}
+            {F('zinssatzReman', 'Diskontzins REMAN (%)')}
+            {F('hubeProStundeReman', 'Lastzyklen je Stunde (Hübe/h)')}
+            {F('kostensteigerungJeReman', 'Kostensteigerung je REMAN (%)')}
+            {F('distanzReman', 'Distanz (km)')}
           </Section>
 
           <Section icon={Gauge} title="Allgemein">
-            <InputField label="Analysehorizont (Jahre)" value={form.analysehorizont} onChange={(v) => updateForm('analysehorizont', v)} onCommit={() => commitParam('analysehorizont')} />
-            <InputField label="Betriebsstunden je Jahr" value={form.stundenProJahr} onChange={(v) => updateForm('stundenProJahr', v)} onCommit={() => commitParam('stundenProJahr')} />
-            <InputField label="Qualitäts-Yield (%)" value={form.qualitaetsYield} onChange={(v) => updateForm('qualitaetsYield', v)} onCommit={() => commitParam('qualitaetsYield')} />
-            <InputField label="Performance-Yield (OEE) (%)" value={form.performanceYield} onChange={(v) => updateForm('performanceYield', v)} onCommit={() => commitParam('performanceYield')} />
-            <InputField label="Inflation (%)" value={form.inflation} onChange={(v) => updateForm('inflation', v)} onCommit={() => commitParam('inflation')} />
-            <InputField label="CO₂-Kostensteigerung (%/Jahr)" value={form.co2Steigerung} onChange={(v) => updateForm('co2Steigerung', v)} onCommit={() => commitParam('co2Steigerung')} />
+            {F('analysehorizont', 'Analysehorizont (Jahre)')}
+            {F('stundenProJahr', 'Betriebsstunden je Jahr')}
+            {F('qualitaetsYield', 'Qualitäts-Yield (%)')}
+            {F('performanceYield', 'Performance-Yield (OEE) (%)')}
+            {F('inflation', 'Inflation (%)')}
+            {F('co2Steigerung', 'CO₂-Kostensteigerung (%/Jahr)')}
           </Section>
         </div>
 
