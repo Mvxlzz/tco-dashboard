@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 
 export default function TCODashboard() {
+  // ===== Zahlenzustand für Berechnungen =====
   const [params, setParams] = useState({
     // Neuteil
     herstellkosten: 50000,
@@ -44,15 +45,29 @@ export default function TCODashboard() {
     co2Steigerung: 4.0               // % p.a.
   });
 
-  const updateParam = (key, value) => {
-    const num = parseFloat(value);
-    setParams(prev => ({ ...prev, [key]: isNaN(num) ? 0 : num }));
+  // ===== String-Formzustand für komfortable Eingabe =====
+  const [form, setForm] = useState(() =>
+    Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
+  );
+
+  // Nur sichtbare Strings updaten (kein Re-Render der Charts)
+  const updateForm = (key: string, next: string) => {
+    setForm(prev => ({ ...prev, [key]: next }));
   };
 
-  const formatCurrency = (value) =>
+  // Commit: String -> Number (bei Blur/Enter)
+  const commitParam = (key: string) => {
+    const raw = form[key]?.trim();
+    if (raw === '' || raw === undefined) return; // leer: nichts tun
+    const normalized = raw.replace(',', '.');
+    const num = Number(normalized);
+    setParams(prev => ({ ...prev, [key]: Number.isFinite(num) ? num : 0 }));
+  };
+
+  const formatCurrency = (value: number) =>
     new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value);
 
-  const formatNumber = (value, decimals = 0) =>
+  const formatNumber = (value: number, decimals = 0) =>
     new Intl.NumberFormat('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
 
   const calculations = useMemo(() => {
@@ -72,7 +87,7 @@ export default function TCODashboard() {
     const periodeNeu = standzeitNeuJ + leadNeuJ;
     const periodeRem = standzeitRemanJ + leadRemJ;
 
-    const pv = (value, rate, time) => {
+    const pv = (value: number, rate: number, time: number) => {
       if (Math.abs(time) < EPS || Math.abs(rate) < EPS) return value;
       return value / Math.pow(1 + rate, time);
     };
@@ -83,12 +98,12 @@ export default function TCODashboard() {
     const tCo2Rem = (2 * p.distanzReman * gPerKm) / 1_000_000;
 
     // Events (Neukauf / Reman)
-    const neukaufTimes = [];
+    const neukaufTimes: number[] = [];
     if (periodeNeu > 0) {
       for (let t = periodeNeu; t <= p.analysehorizont + EPS; t += periodeNeu) neukaufTimes.push(+t.toFixed(10));
     }
 
-    const remanTimes = [];
+    const remanTimes: number[] = [];
     if (periodeRem > 0) {
       for (let t = standzeitNeuJ + leadRemJ; t <= p.analysehorizont + EPS; t += periodeRem) remanTimes.push(+t.toFixed(10));
     }
@@ -96,7 +111,7 @@ export default function TCODashboard() {
     const firstReman = remanTimes.length > 0 ? remanTimes[0] : 1e30;
 
     // Timeline: 0, Jahresenden, (fractionales Endjahr), Events, Produktions-Endpunkte
-    const TL = [0];
+    const TL: number[] = [0];
     for (let j = 1; j <= Math.floor(p.analysehorizont); j++) TL.push(j);
     if (Math.abs(p.analysehorizont - Math.floor(p.analysehorizont)) > EPS) TL.push(p.analysehorizont);
     TL.push(...remanTimes, ...neukaufTimes);
@@ -107,7 +122,7 @@ export default function TCODashboard() {
 
     // sort & unique (mit EPS)
     TL.sort((a, b) => a - b);
-    const uniqueTL = [];
+    const uniqueTL: number[] = [];
     for (let i = 0; i < TL.length; i++) {
       if (i === 0 || Math.abs(TL[i] - TL[i - 1]) > EPS) uniqueTL.push(TL[i]);
     }
@@ -120,7 +135,7 @@ export default function TCODashboard() {
     const q = p.qualitaetsYield / 100;
     const perf = p.performanceYield / 100;
 
-    const data = [];
+    const data: { time: number; tcoReman: number; tcoNeu: number; costPerOutputReman: number; costPerOutputNeu: number }[] = [];
 
     for (let i = 0; i < uniqueTL.length; i++) {
       const t1 = uniqueTL[i];
@@ -151,9 +166,9 @@ export default function TCODashboard() {
       // Output-Fenster (produktiv ja, Lead nein)
       // REMAN-Szenario: vor erstem REMAN = Neuteil-Rate, danach REMAN-Rate
       let idxR = -1;
-      for (let j = 0; j < remanTimes.length; j++) if (remanTimes[j] <= t0 + EPS) idxR = j;
+      for (let j = 0; j < remanTimes.length; j++) if (remanTimes[j] <= t0 + 1e-6) idxR = j;
 
-      let prodStartR, prodEndR, rateRem;
+      let prodStartR: number, prodEndR: number, rateRem: number;
       if (idxR === -1) {
         prodStartR = 0; prodEndR = standzeitNeuJ; rateRem = p.hubeProStundeNeu;
       } else {
@@ -165,9 +180,9 @@ export default function TCODashboard() {
 
       // NEU-Szenario
       let idxN = -1;
-      for (let j = 0; j < neukaufTimes.length; j++) if (neukaufTimes[j] <= t0 + EPS) idxN = j;
+      for (let j = 0; j < neukaufTimes.length; j++) if (neukaufTimes[j] <= t0 + 1e-6) idxN = j;
 
-      let prodStartN, prodEndN;
+      let prodStartN: number, prodEndN: number;
       if (idxN === -1) { prodStartN = 0; prodEndN = standzeitNeuJ; }
       else { prodStartN = neukaufTimes[idxN]; prodEndN = neukaufTimes[idxN] + standzeitNeuJ; }
 
@@ -225,20 +240,31 @@ export default function TCODashboard() {
     };
   }, [params]);
 
-  const InputField = ({ label, value, onChange, step = 1 }) => (
+  // ===== Eingabefeld (string-basiert, commit bei Blur/Enter) =====
+  type InputFieldProps = {
+    label: string;
+    value: string;                        // String!
+    onChange: (v: string) => void;
+    onCommit: () => void;                 // Blur/Enter
+    step?: number | string;
+  };
+
+  const InputField: React.FC<InputFieldProps> = ({ label, value, onChange, onCommit }) => (
     <div>
       <label className="block text-xs font-medium text-gray-700">{label}</label>
       <input
-        type="number"
-        step={step}
+        type="text"                       // vermeidet Cursor-Sprünge
+        inputMode="decimal"               // mobile Zahlentastatur
         value={value}
-        onChange={onChange}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onCommit}
+        onKeyDown={(e) => { if (e.key === 'Enter') onCommit(); }}
         className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
       />
     </div>
   );
 
-  const Section = ({ icon: Icon, title, children }) => (
+  const Section: React.FC<{ icon: any; title: string; children: React.ReactNode }> = ({ icon: Icon, title, children }) => (
     <div className="bg-white rounded-lg shadow-sm p-4">
       <div className="flex items-center gap-2 mb-3">
         <Icon className="h-4 w-4 text-gray-600" />
@@ -267,37 +293,37 @@ export default function TCODashboard() {
         {/* Eingaben – neu gruppiert */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <Section icon={Factory} title="Parameter Neuteil">
-            <InputField label="Herstellkosten (€)" value={params.herstellkosten} onChange={(e) => updateParam('herstellkosten', e.target.value)} />
-            <InputField label="Inbetriebnahmekosten (€)" value={params.inbetriebnahme} onChange={(e) => updateParam('inbetriebnahme', e.target.value)} />
-            <InputField label="Betriebskosten/Jahr (auch REMAN) (€)" value={params.betriebskosten} onChange={(e) => updateParam('betriebskosten', e.target.value)} />
-            <InputField label="Verschrottungserlöse/-Kosten (€)" value={params.entsorgungNeu} onChange={(e) => updateParam('entsorgungNeu', e.target.value)} />
-            <InputField label="CO₂-Kosten (€/t)" value={params.co2KostenNeu} onChange={(e) => updateParam('co2KostenNeu', e.target.value)} />
-            <InputField label="Standzeit Neuteil (Tage)" value={params.standzeitNeu} onChange={(e) => updateParam('standzeitNeu', e.target.value)} />
-            <InputField label="Wiederbeschaffungszeit (Tage)" value={params.leadTimeNeu} onChange={(e) => updateParam('leadTimeNeu', e.target.value)} />
-            <InputField label="Diskontzins Neuteil (%)" value={params.zinssatzNeu} step={0.1} onChange={(e) => updateParam('zinssatzNeu', e.target.value)} />
-            <InputField label="Lastzyklen je Stunde (Hübe/h)" value={params.hubeProStundeNeu} onChange={(e) => updateParam('hubeProStundeNeu', e.target.value)} />
-            <InputField label="Distanz (km)" value={params.distanzNeu} onChange={(e) => updateParam('distanzNeu', e.target.value)} />
+            <InputField label="Herstellkosten (€)" value={form.herstellkosten} onChange={(v) => updateForm('herstellkosten', v)} onCommit={() => commitParam('herstellkosten')} />
+            <InputField label="Inbetriebnahmekosten (€)" value={form.inbetriebnahme} onChange={(v) => updateForm('inbetriebnahme', v)} onCommit={() => commitParam('inbetriebnahme')} />
+            <InputField label="Betriebskosten/Jahr (auch REMAN) (€)" value={form.betriebskosten} onChange={(v) => updateForm('betriebskosten', v)} onCommit={() => commitParam('betriebskosten')} />
+            <InputField label="Verschrottungserlöse/-Kosten (€)" value={form.entsorgungNeu} onChange={(v) => updateForm('entsorgungNeu', v)} onCommit={() => commitParam('entsorgungNeu')} />
+            <InputField label="CO₂-Kosten (€/t)" value={form.co2KostenNeu} onChange={(v) => updateForm('co2KostenNeu', v)} onCommit={() => commitParam('co2KostenNeu')} />
+            <InputField label="Standzeit Neuteil (Tage)" value={form.standzeitNeu} onChange={(v) => updateForm('standzeitNeu', v)} onCommit={() => commitParam('standzeitNeu')} />
+            <InputField label="Wiederbeschaffungszeit (Tage)" value={form.leadTimeNeu} onChange={(v) => updateForm('leadTimeNeu', v)} onCommit={() => commitParam('leadTimeNeu')} />
+            <InputField label="Diskontzins Neuteil (%)" value={form.zinssatzNeu} onChange={(v) => updateForm('zinssatzNeu', v)} onCommit={() => commitParam('zinssatzNeu')} />
+            <InputField label="Lastzyklen je Stunde (Hübe/h)" value={form.hubeProStundeNeu} onChange={(v) => updateForm('hubeProStundeNeu', v)} onCommit={() => commitParam('hubeProStundeNeu')} />
+            <InputField label="Distanz (km)" value={form.distanzNeu} onChange={(v) => updateForm('distanzNeu', v)} onCommit={() => commitParam('distanzNeu')} />
           </Section>
 
           <Section icon={Recycle} title="Parameter REMAN">
-            <InputField label="Kosten je Aufbereitung (€)" value={params.remanKosten} onChange={(e) => updateParam('remanKosten', e.target.value)} />
-            <InputField label="Verschrottungserlöse/-Kosten (€)" value={params.entsorgungReman} onChange={(e) => updateParam('entsorgungReman', e.target.value)} />
-            <InputField label="CO₂-Kosten (€/t)" value={params.co2KostenReman} onChange={(e) => updateParam('co2KostenReman', e.target.value)} />
-            <InputField label="Standzeit REMAN (Tage)" value={params.standzeitReman} onChange={(e) => updateParam('standzeitReman', e.target.value)} />
-            <InputField label="Wiederbeschaffungszeit (Tage)" value={params.leadTimeReman} onChange={(e) => updateParam('leadTimeReman', e.target.value)} />
-            <InputField label="Diskontzins REMAN (%)" value={params.zinssatzReman} step={0.1} onChange={(e) => updateParam('zinssatzReman', e.target.value)} />
-            <InputField label="Lastzyklen je Stunde (Hübe/h)" value={params.hubeProStundeReman} onChange={(e) => updateParam('hubeProStundeReman', e.target.value)} />
-            <InputField label="Kostensteigerung je REMAN (%)" value={params.kostensteigerungJeReman} step={0.1} onChange={(e) => updateParam('kostensteigerungJeReman', e.target.value)} />
-            <InputField label="Distanz (km)" value={params.distanzReman} onChange={(e) => updateParam('distanzReman', e.target.value)} />
+            <InputField label="Kosten je Aufbereitung (€)" value={form.remanKosten} onChange={(v) => updateForm('remanKosten', v)} onCommit={() => commitParam('remanKosten')} />
+            <InputField label="Verschrottungserlöse/-Kosten (€)" value={form.entsorgungReman} onChange={(v) => updateForm('entsorgungReman', v)} onCommit={() => commitParam('entsorgungReman')} />
+            <InputField label="CO₂-Kosten (€/t)" value={form.co2KostenReman} onChange={(v) => updateForm('co2KostenReman', v)} onCommit={() => commitParam('co2KostenReman')} />
+            <InputField label="Standzeit REMAN (Tage)" value={form.standzeitReman} onChange={(v) => updateForm('standzeitReman', v)} onCommit={() => commitParam('standzeitReman')} />
+            <InputField label="Wiederbeschaffungszeit (Tage)" value={form.leadTimeReman} onChange={(v) => updateForm('leadTimeReman', v)} onCommit={() => commitParam('leadTimeReman')} />
+            <InputField label="Diskontzins REMAN (%)" value={form.zinssatzReman} onChange={(v) => updateForm('zinssatzReman', v)} onCommit={() => commitParam('zinssatzReman')} />
+            <InputField label="Lastzyklen je Stunde (Hübe/h)" value={form.hubeProStundeReman} onChange={(v) => updateForm('hubeProStundeReman', v)} onCommit={() => commitParam('hubeProStundeReman')} />
+            <InputField label="Kostensteigerung je REMAN (%)" value={form.kostensteigerungJeReman} onChange={(v) => updateForm('kostensteigerungJeReman', v)} onCommit={() => commitParam('kostensteigerungJeReman')} />
+            <InputField label="Distanz (km)" value={form.distanzReman} onChange={(v) => updateForm('distanzReman', v)} onCommit={() => commitParam('distanzReman')} />
           </Section>
 
           <Section icon={Gauge} title="Allgemein">
-            <InputField label="Analysehorizont (Jahre)" value={params.analysehorizont} onChange={(e) => updateParam('analysehorizont', e.target.value)} />
-            <InputField label="Betriebsstunden je Jahr" value={params.stundenProJahr} onChange={(e) => updateParam('stundenProJahr', e.target.value)} />
-            <InputField label="Qualitäts-Yield (%)" value={params.qualitaetsYield} step={0.1} onChange={(e) => updateParam('qualitaetsYield', e.target.value)} />
-            <InputField label="Performance-Yield (OEE) (%)" value={params.performanceYield} step={0.1} onChange={(e) => updateParam('performanceYield', e.target.value)} />
-            <InputField label="Inflation (%)" value={params.inflation} step={0.1} onChange={(e) => updateParam('inflation', e.target.value)} />
-            <InputField label="CO₂-Kostensteigerung (%/Jahr)" value={params.co2Steigerung} step={0.1} onChange={(e) => updateParam('co2Steigerung', e.target.value)} />
+            <InputField label="Analysehorizont (Jahre)" value={form.analysehorizont} onChange={(v) => updateForm('analysehorizont', v)} onCommit={() => commitParam('analysehorizont')} />
+            <InputField label="Betriebsstunden je Jahr" value={form.stundenProJahr} onChange={(v) => updateForm('stundenProJahr', v)} onCommit={() => commitParam('stundenProJahr')} />
+            <InputField label="Qualitäts-Yield (%)" value={form.qualitaetsYield} onChange={(v) => updateForm('qualitaetsYield', v)} onCommit={() => commitParam('qualitaetsYield')} />
+            <InputField label="Performance-Yield (OEE) (%)" value={form.performanceYield} onChange={(v) => updateForm('performanceYield', v)} onCommit={() => commitParam('performanceYield')} />
+            <InputField label="Inflation (%)" value={form.inflation} onChange={(v) => updateForm('inflation', v)} onCommit={() => commitParam('inflation')} />
+            <InputField label="CO₂-Kostensteigerung (%/Jahr)" value={form.co2Steigerung} onChange={(v) => updateForm('co2Steigerung', v)} onCommit={() => commitParam('co2Steigerung')} />
           </Section>
         </div>
 
@@ -338,7 +364,7 @@ export default function TCODashboard() {
               <LineChart data={calculations.tcoData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="time" />
-                <YAxis tickFormatter={(v) => formatNumber(v / 1000) + ' k'} />
+                <YAxis tickFormatter={(v) => formatNumber((v as number) / 1000) + ' k'} />
                 <Tooltip formatter={(v) => (typeof v === 'number' ? formatCurrency(v) : v)} />
                 <Legend />
                 <Line type="stepAfter" dataKey="tcoReman" stroke="#10b981" strokeWidth={2} name="Mit REMAN" dot={false} />
@@ -384,7 +410,7 @@ export default function TCODashboard() {
               ]}>
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip formatter={(v) => [`${formatNumber(v, 0)} €/t`, 'CO₂-Kosten']} />
+                <Tooltip formatter={(v) => [`${formatNumber(v as number, 0)} €/t`, 'CO₂-Kosten']} />
                 <Bar dataKey="value" fill="#10b981" />
               </BarChart>
             </ResponsiveContainer>
@@ -404,7 +430,7 @@ export default function TCODashboard() {
               ]}>
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip formatter={(v) => [`${formatNumber(v, 0)} Tage`, 'Lead Time']} />
+                <Tooltip formatter={(v) => [`${formatNumber(v as number, 0)} Tage`, 'Lead Time']} />
                 <Bar dataKey="value" fill="#3b82f6" />
               </BarChart>
             </ResponsiveContainer>
@@ -423,8 +449,8 @@ export default function TCODashboard() {
                 { name: 'REMAN', value: calculations.recyclingComparison.reman }
               ]}>
                 <XAxis dataKey="name" />
-                <YAxis tickFormatter={(v) => formatNumber(v / 1000) + ' k'} />
-                <Tooltip formatter={(v) => [formatCurrency(v), 'Entsorgung']} />
+                <YAxis tickFormatter={(v) => formatNumber((v as number) / 1000) + ' k'} />
+                <Tooltip formatter={(v) => [formatCurrency(v as number), 'Entsorgung']} />
                 <Bar dataKey="value" fill="#f59e0b" />
               </BarChart>
             </ResponsiveContainer>
@@ -443,8 +469,8 @@ export default function TCODashboard() {
                 { name: 'REMAN', value: calculations.neuteilVsReman.reman }
               ]}>
                 <XAxis dataKey="name" />
-                <YAxis tickFormatter={(v) => formatNumber(v / 1000) + ' k'} />
-                <Tooltip formatter={(v) => [formatCurrency(v), 'Summe']} />
+                <YAxis tickFormatter={(v) => formatNumber((v as number) / 1000) + ' k'} />
+                <Tooltip formatter={(v) => [formatCurrency(v as number), 'Summe']} />
                 <Bar dataKey="value" fill="#8b5cf6" />
               </BarChart>
             </ResponsiveContainer>
