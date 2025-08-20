@@ -230,7 +230,7 @@ export default function TCODashboard() {
   };
 
   const restoreFocus = useCallback(() => {
-    // Wenn ein Modal offen ist, niemals Fokus „zurückziehen"
+    // Wenn ein Modal offen ist, niemals Fokus „zurückziehen“
     if (hasOpenModal) return;
 
     const key = activeKeyRef.current;
@@ -463,7 +463,7 @@ export default function TCODashboard() {
       kphDeltaPct,
       // Mini-Kacheln
       leadTimeComparison: { neu: p.leadTimeNeu, reman: p.leadTimeReman, delta: leadDelta },
-      co2Comparison: { neu: co2NeuNow, reman: co2RemNow, delta: co2Delta },
+      co2Comparison: { neu: p.co2KostenNeu, reman: p.co2KostenReman, delta: co2Delta },
       recyclingComparison: { neu: p.entsorgungNeu, reman: p.entsorgungReman, delta: entsorgDelta },
       neuteilVsReman: { neu: totalNeuStatic, reman: totalRemStatic, delta: totalDelta }
     };
