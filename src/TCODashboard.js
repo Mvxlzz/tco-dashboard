@@ -34,7 +34,9 @@ function ItemizedCostField({
 
   const handleApplyChanges = () => {
     const next = { ...costs };
-    next[groupKey] = { ...(next[groupKey] || { total: 0 }), items: localItems };
+    // Bereinige leere Items vor dem Speichern
+    const cleanedItems = localItems.filter(it => (it.label || '').trim() !== '' || (it.amount || '') !== '');
+    next[groupKey] = { ...(next[groupKey] || { total: 0 }), items: cleanedItems };
     setCosts(next);
     setOpen(false);
     onOpenChange?.(false);
@@ -48,12 +50,13 @@ function ItemizedCostField({
   return (
     <div>
       <div className="flex items-center justify-between">
+        {/* --- UI-ANPASSUNG: Titel ist jetzt der klickbare Link --- */}
         <label
-          className="block text-xs font-medium text-gray-700 cursor-pointer"
           onClick={openModal}
           title="Einzelkosten bearbeiten"
+          className="block text-xs font-medium text-gray-700 cursor-pointer hover:text-blue-600 hover:underline decoration-dotted"
         >
-          {title} <span className="text-gray-400">(klicken für Einzelkosten)</span>
+          {title}
         </label>
         <span className="text-[10px] px-2 py-[2px] rounded-full bg-gray-100 text-gray-600">{badge}</span>
       </div>
@@ -62,7 +65,6 @@ function ItemizedCostField({
         inputMode="decimal"
         autoComplete="off"
         value={valueStr}
-        // KORREKTUR: Übergibt den Key (groupKey) an die stabile Callback-Funktion
         onChange={(e) => onValueStrChange(groupKey, e.target.value, e)}
         onBlur={() => onCommitTotal(groupKey)}
         onKeyDown={(e) => { if (e.key === 'Enter') { onCommitTotal(groupKey); e.currentTarget.blur(); } }}
@@ -136,7 +138,7 @@ function ItemizedCostField({
                   className="px-3 py-1 text-sm rounded border"
                   onClick={() => setLocalItems([])}
                 >
-                  Einzelkosten löschen
+                  Alle löschen
                 </button>
                 <button
                   className="px-3 py-1 text-sm rounded bg-blue-600 text-white"
@@ -183,8 +185,6 @@ export default function TCODashboard() {
   const inputRefs = useRef({});
   const activeKeyRef = useRef(null);
   const caretRef = useRef({ start: null, end: null });
-
-  // KORREKTUR: Ref für den `form`-Zustand, damit Callbacks nicht von `form` abhängen
   const formRef = useRef(form);
   useEffect(() => {
     formRef.current = form;
@@ -192,7 +192,6 @@ export default function TCODashboard() {
 
   const setInputRef = (key, el) => { if (el) inputRefs.current[key] = el; };
 
-  // KORREKTUR: `updateForm` wird mit `useCallback` stabilisiert.
   const updateForm = useCallback((key, next, e) => {
     if (e?.target) {
       try {
@@ -222,7 +221,6 @@ export default function TCODashboard() {
     restoreFocus();
   });
 
-  // KORREKTUR: `commitParam` wird mit `useCallback` stabilisiert und nutzt die `formRef`.
   const commitParam = useCallback((key) => {
     const currentForm = formRef.current;
     const raw = (currentForm[key] ?? '').trim();
@@ -238,6 +236,13 @@ export default function TCODashboard() {
       });
     }
   }, []);
+
+  // --- FOKUS-FIX: Stabile Handler-Funktion, die Commit und Blur kombiniert ---
+  const handleCommitAndBlur = useCallback((key) => {
+    commitParam(key);
+    activeKeyRef.current = null;
+  }, [commitParam]);
+
 
   const formatCurrency = (value) =>
     new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value);
@@ -267,7 +272,10 @@ export default function TCODashboard() {
     const rRem = (1 + p.zinssatzReman / 100) / (1 + p.inflation / 100) - 1;
     const periodeNeu = standzeitNeuJ + leadNeuJ;
     const periodeRem = standzeitRemanJ + leadRemJ;
-    const pv = (value, rate, time) => value / Math.pow(1 + rate, time);
+    const pv = (value, rate, time) => {
+        if (Math.abs(time) < EPS || Math.abs(rate) < EPS) return value;
+        return value / Math.pow(1 + rate, time);
+    };
     const gPerKm = 490;
     const tCo2Neu = (2 * p.distanzNeu * gPerKm) / 1_000_000;
     const tCo2Rem = (2 * p.distanzReman * gPerKm) / 1_000_000;
@@ -280,7 +288,13 @@ export default function TCODashboard() {
     for (let j = 1; j <= Math.floor(p.analysehorizont); j++) TL.push(j);
     TL.push(p.analysehorizont, ...remanTimes, ...neukaufTimes, standzeitNeuJ);
     remanTimes.forEach(t => TL.push(t + standzeitRemanJ));
-    const uniqueTL = [...new Set(TL.sort((a, b) => a - b))];
+    
+    TL.sort((a, b) => a - b);
+    const uniqueTL = [];
+    for (let i = 0; i < TL.length; i++) {
+        if (i === 0 || Math.abs(TL[i] - TL[i - 1]) > EPS) uniqueTL.push(TL[i]);
+    }
+
     let tcoReman = p.herstellkosten + p.inbetriebnahme;
     let tcoNeu = p.herstellkosten + p.inbetriebnahme;
     let outRem = 0, outNeu = 0;
@@ -328,7 +342,6 @@ export default function TCODashboard() {
     return { tcoData: data, finalTcoReman, finalTcoNeu, savings, savingsPercent, kphReman, kphNeu, kphDelta, kphDeltaPct, leadTimeComparison: { neu: p.leadTimeNeu, reman: p.leadTimeReman, delta: p.leadTimeReman - p.leadTimeNeu }, co2Comparison: { neu: p.co2KostenNeu, reman: p.co2KostenReman, delta: p.co2KostenReman - p.co2KostenNeu }, recyclingComparison: { neu: p.entsorgungNeu, reman: p.entsorgungReman, delta: p.entsorgungReman - p.entsorgungNeu }, neuteilVsReman: { neu: p.herstellkosten + p.inbetriebnahme + p.betriebskosten + p.entsorgungNeu + p.co2KostenNeu, reman: p.remanKosten + p.entsorgungReman + p.co2KostenReman, delta: (p.remanKosten + p.entsorgungReman + p.co2KostenReman) - (p.herstellkosten + p.inbetriebnahme + p.betriebskosten + p.entsorgungNeu + p.co2KostenNeu) } };
   }, [params, costs]);
 
-  // KORREKTUR: InputField wurde angepasst, um stabile Callbacks zu erhalten
   const InputField = memo(function InputField({ name, label, value, onChange, onCommit }) {
     return (
       <div>
@@ -342,7 +355,7 @@ export default function TCODashboard() {
           value={value}
           onFocus={() => { activeKeyRef.current = name; }}
           onChange={(e) => onChange(name, e.target.value, e)}
-          onBlur={() => onCommit(name)}
+          onBlur={() => onCommit(name)} // Ruft jetzt handleCommitAndBlur auf
           onKeyDown={(e) => { if (e.key === 'Enter') { onCommit(name); e.currentTarget.blur(); } }}
           className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
@@ -360,7 +373,6 @@ export default function TCODashboard() {
     </div>
   );
 
-  // KORREKTUR: Der Renderer übergibt die stabilen Callbacks direkt
   const F = (name, label) => (
     <InputField
       key={name}
@@ -368,7 +380,7 @@ export default function TCODashboard() {
       label={label}
       value={form[name]}
       onChange={updateForm}
-      onCommit={commitParam}
+      onCommit={handleCommitAndBlur} // FOKUS-FIX: Stabile Funktion übergeben
     />
   );
 
@@ -399,7 +411,7 @@ export default function TCODashboard() {
               groupKey="herstellkosten"
               valueStr={form.herstellkosten}
               onValueStrChange={updateForm}
-              onCommitTotal={commitParam}
+              onCommitTotal={handleCommitAndBlur} // FOKUS-FIX
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
               onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
@@ -408,7 +420,7 @@ export default function TCODashboard() {
               groupKey="inbetriebnahme"
               valueStr={form.inbetriebnahme}
               onValueStrChange={updateForm}
-              onCommitTotal={commitParam}
+              onCommitTotal={handleCommitAndBlur} // FOKUS-FIX
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
               onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
@@ -427,7 +439,7 @@ export default function TCODashboard() {
               groupKey="remanKosten"
               valueStr={form.remanKosten}
               onValueStrChange={updateForm}
-              onCommitTotal={commitParam}
+              onCommitTotal={handleCommitAndBlur} // FOKUS-FIX
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
               onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
@@ -447,7 +459,7 @@ export default function TCODashboard() {
               groupKey="betriebskosten"
               valueStr={form.betriebskosten}
               onValueStrChange={updateForm}
-              onCommitTotal={commitParam}
+              onCommitTotal={handleCommitAndBlur} // FOKUS-FIX
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
               onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
