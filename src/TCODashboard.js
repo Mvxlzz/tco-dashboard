@@ -515,7 +515,7 @@ export default function TCODashboard() {
 
           <Section icon={Gauge} title="Allgemein">
             <ItemizedCostField
-              title="Betriebskosten/Jahr (auch REMAN) (€)"
+              title="OPEX/Jahr (auch REMAN) (€)"
               groupKey="betriebskosten"
               valueStr={form.betriebskosten}
               onCommitTotal={commitParam}
