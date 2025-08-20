@@ -215,7 +215,7 @@ export default function TCODashboard() {
 
     // Mini-Charts: Werte + Deltas
     const co2NeuNow = p.co2KostenNeu;
-    the const co2RemNow = p.co2KostenReman;
+    const co2RemNow = p.co2KostenReman;
     const co2Delta = co2RemNow - co2NeuNow;
 
     const leadDelta = p.leadTimeReman - p.leadTimeNeu;
@@ -346,7 +346,7 @@ export default function TCODashboard() {
         {/* Verlauf-Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="h-4 w-4 text-gray-600" />
               <h3 className="text-lg font-semibold text-gray-900">
                 TCO-Verlauf über Zeit
@@ -366,7 +366,7 @@ export default function TCODashboard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2">
               <Scale className="h-4 w-4 text-gray-600" />
               <h3 className="text-lg font-semibold text-gray-900">
                 Kosten je Hub (Cent)
@@ -389,7 +389,7 @@ export default function TCODashboard() {
         {/* Mini-Bar-Charts mit Tooltips und Δ im Titel */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1">
               <Leaf className="h-4 w-4 text-emerald-600" />
               <h3 className="text-sm font-semibold text-gray-900">
                 CO₂-Kosten <span className="text-gray-500">Δ {formatNumber(calculations.co2Comparison.delta, 0)}</span>
@@ -409,7 +409,7 @@ export default function TCODashboard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1">
               <Clock className="h-4 w-4 text-blue-600" />
               <h3 className="text-sm font-semibold text-gray-900">
                 Lead Time (Tage) <span className="text-gray-500">Δ {formatNumber(calculations.leadTimeComparison.delta, 0)}</span>
@@ -429,7 +429,7 @@ export default function TCODashboard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1">
               <Recycle className="h-4 w-4 text-amber-600" />
               <h3 className="text-sm font-semibold text-gray-900">
                 Entsorgung <span className="text-gray-500">Δ {formatCurrency(calculations.recyclingComparison.delta)}</span>
@@ -449,7 +449,7 @@ export default function TCODashboard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1">
               <Factory className="h-4 w-4 text-violet-600" />
               <h3 className="text-sm font-semibold text-gray-900">
                 Gesamtkosten (statisch) <span className="text-gray-500">Δ {formatCurrency(calculations.neuteilVsReman.delta)}</span>
