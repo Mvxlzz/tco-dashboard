@@ -7,6 +7,153 @@ import {
   Calculator, TrendingUp, Clock, Recycle, Factory, Leaf, Gauge, Scale
 } from 'lucide-react';
 
+/** ---------- Hilfsfunktionen für itemisierte Kosten ---------- */
+const sumItems = (items) => items.reduce((s, it) => s + (Number(String(it.amount).replace(',', '.')) || 0), 0);
+
+/** ---------- Reusable: Feld + Modal für Einzelkosten ---------- */
+function ItemizedCostField({
+  title, groupKey,
+  valueStr, onValueStrChange, onCommitTotal,
+  costs, setCosts, formatCurrency
+}) {
+  const [open, setOpen] = useState(false);
+  const g = costs[groupKey] || { total: 0, items: [] };
+  const items = g.items || [];
+  const usesItems = items.length > 0;
+  const effective = usesItems ? sumItems(items) : (Number(String(valueStr).replace(',', '.')) || 0);
+  const badge = usesItems ? `Σ ${items.length}` : '—';
+
+  return (
+    <div>
+      {/* Label-Zeile */}
+      <div className="flex items-center justify-between">
+        <label
+          className="block text-xs font-medium text-gray-700 cursor-pointer"
+          onClick={() => setOpen(true)}
+          title="Einzelkosten bearbeiten"
+        >
+          {title} <span className="text-gray-400">(klicken für Einzelkosten)</span>
+        </label>
+        <span className="text-[10px] px-2 py-[2px] rounded-full bg-gray-100 text-gray-600">{badge}</span>
+      </div>
+
+      {/* Direktwert-Eingabe (deaktiviert, wenn Items existieren) */}
+      <input
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        value={valueStr}
+        onChange={(e) => onValueStrChange(e.target.value)}
+        onBlur={onCommitTotal}
+        onKeyDown={(e) => { if (e.key === 'Enter') { onCommitTotal(); e.currentTarget.blur(); } }}
+        disabled={usesItems}
+        className={`w-full px-2 py-1 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500
+                    ${usesItems ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
+      />
+      <div className="mt-1 text-[11px] text-gray-500">
+        Effektiv: <b>{formatCurrency(effective)}</b>{usesItems ? ' (Summe Einzelkosten)' : ' (Direktwert)'}
+      </div>
+
+      {/* Modal */}
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
+          {/* Dialog */}
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-gray-900">{title} – Einzelkosten</h4>
+              <button className="text-gray-500 text-sm" onClick={() => setOpen(false)}>Schließen</button>
+            </div>
+
+            <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
+              {items.map((it, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2">
+                  <input
+                    className="col-span-7 px-2 py-1 text-sm border rounded-md"
+                    placeholder={`Position ${idx + 1}`}
+                    value={it.label || ''}
+                    onChange={(e) => {
+                      const next = { ...costs };
+                      next[groupKey] = next[groupKey] || { total: 0, items: [] };
+                      next[groupKey].items = items.map((x, i) => i === idx ? { ...x, label: e.target.value } : x);
+                      setCosts(next);
+                    }}
+                  />
+                  <input
+                    className="col-span-4 px-2 py-1 text-sm border rounded-md"
+                    placeholder="Betrag (€)"
+                    inputMode="decimal"
+                    value={String(it.amount ?? '')}
+                    onChange={(e) => {
+                      const next = { ...costs };
+                      next[groupKey] = next[groupKey] || { total: 0, items: [] };
+                      next[groupKey].items = items.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x);
+                      setCosts(next);
+                    }}
+                  />
+                  <button
+                    className="col-span-1 text-xs text-red-600"
+                    onClick={() => {
+                      const next = { ...costs };
+                      next[groupKey] = next[groupKey] || { total: 0, items: [] };
+                      next[groupKey].items = items.filter((_, i) => i !== idx);
+                      setCosts(next);
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+
+              {/* Add-Row */}
+              <button
+                className="mt-1 text-xs px-2 py-1 rounded bg-gray-100"
+                onClick={() => {
+                  if (items.length >= 8) return;
+                  const next = { ...costs };
+                  next[groupKey] = next[groupKey] || { total: 0, items: [] };
+                  next[groupKey].items = [...items, { label: '', amount: '' }];
+                  setCosts(next);
+                }}
+                disabled={items.length >= 8}
+              >
+                + Position hinzufügen {items.length >= 8 ? '(max. 8)' : ''}
+              </button>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Summe Einzelkosten: <b>{formatCurrency(sumItems(items))}</b>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="px-3 py-1 text-sm rounded border"
+                  onClick={() => {
+                    const next = { ...costs };
+                    next[groupKey] = next[groupKey] || { total: 0, items: [] };
+                    next[groupKey].items = [];
+                    setCosts(next);
+                  }}
+                >
+                  Einzelkosten löschen
+                </button>
+                <button
+                  className="px-3 py-1 text-sm rounded bg-blue-600 text-white"
+                  onClick={() => setOpen(false)}
+                >
+                  Übernehmen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** ---------- Hauptkomponente ---------- */
 export default function TCODashboard() {
   // ===== Standardwerte (wie im Screenshot) =====
   const [params, setParams] = useState({
@@ -50,22 +197,25 @@ export default function TCODashboard() {
     Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
   );
 
+  // ===== Itemisierte Kosten (4 Gruppen) =====
+  const [costs, setCosts] = useState({
+    herstellkosten: { total: Number(params.herstellkosten) || 0, items: [] },
+    inbetriebnahme: { total: Number(params.inbetriebnahme) || 0, items: [] },
+    betriebskosten: { total: Number(params.betriebskosten) || 0, items: [] },
+    remanKosten:    { total: Number(params.remanKosten) || 0,    items: [] },
+  });
+
   // ===== Fokus-/Caret-Keeper =====
   const inputRefs = useRef({});
   const activeKeyRef = useRef(null);
   const caretRef = useRef({ start: null, end: null });
 
-  const setInputRef = (key, el) => {
-    if (el) inputRefs.current[key] = el;
-  };
+  const setInputRef = (key, el) => { if (el) inputRefs.current[key] = el; };
 
   const updateForm = (key, next, e) => {
     if (e?.target) {
       try {
-        caretRef.current = {
-          start: e.target.selectionStart,
-          end: e.target.selectionEnd
-        };
+        caretRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd };
       } catch {}
     }
     setForm(prev => ({ ...prev, [key]: next }));
@@ -77,27 +227,30 @@ export default function TCODashboard() {
     if (!key) return;
     const el = inputRefs.current[key];
     if (!el) return;
-
-    if (document.activeElement !== el) {
-      el.focus({ preventScroll: true });
-    }
+    if (document.activeElement !== el) { el.focus({ preventScroll: true }); }
     const { start, end } = caretRef.current || {};
     if (start != null && end != null) {
       try { el.setSelectionRange(start, end); } catch {}
     }
   }, []);
+  useEffect(() => { restoreFocus(); });
 
-  useEffect(() => {
-    restoreFocus();
-  });
-
-  // Commit: String -> Number (bei Blur/Enter)
+  // Commit: String -> Number (bei Blur/Enter) + ggf. costs.total syncen
   const commitParam = (key) => {
     const raw = (form[key] ?? '').trim();
     if (raw === '') return;
     const normalized = raw.replace(',', '.');
     const num = Number(normalized);
     setParams(prev => ({ ...prev, [key]: Number.isFinite(num) ? num : 0 }));
+
+    // Wenn es eine der vier itemisierten Gruppen ist UND keine Items existieren:
+    if (['herstellkosten','inbetriebnahme','betriebskosten','remanKosten'].includes(key)) {
+      setCosts(prev => {
+        const g = prev[key] || { total: 0, items: [] };
+        if (g.items && g.items.length > 0) return prev; // Items haben Vorrang
+        return { ...prev, [key]: { ...g, total: Number.isFinite(num) ? num : 0 } };
+      });
+    }
   };
 
   const formatCurrency = (value) =>
@@ -106,9 +259,23 @@ export default function TCODashboard() {
   const formatNumber = (value, decimals = 0) =>
     new Intl.NumberFormat('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
 
-  // ====== Berechnungen nur wenn params sich ändern ======
+  // Effektive Werte aus itemisierten Gruppen
+  const effectiveCost = (group) => {
+    const g = costs[group];
+    if (!g) return Number(params[group]) || 0;
+    return (g.items && g.items.length > 0) ? sumItems(g.items) : (Number(g.total) || 0);
+  };
+
+  // ====== Berechnungen nur wenn params/costs sich ändern ======
   const calculations = useMemo(() => {
-    const p = params;
+    // pEff = params mit den 4 Kostenfeldern als „effektiv“
+    const pEff = { ...params };
+    pEff.herstellkosten = effectiveCost('herstellkosten');
+    pEff.inbetriebnahme  = effectiveCost('inbetriebnahme');
+    pEff.betriebskosten  = effectiveCost('betriebskosten');
+    pEff.remanKosten     = effectiveCost('remanKosten');
+
+    const p = pEff;
     const EPS = 1e-6;
 
     // Zeit in Jahren
@@ -150,10 +317,10 @@ export default function TCODashboard() {
     // Timeline immer mit Horizont (VBA-Style)
     const TL = [0];
     for (let j = 1; j <= Math.floor(p.analysehorizont); j++) TL.push(j);
-    TL.push(p.analysehorizont); // <- explizit immer drin
+    TL.push(p.analysehorizont);
     TL.push(...remanTimes, ...neukaufTimes);
 
-    // Produktions-Endpunkte wie in VBA (für Output-Genauigkeit)
+    // Produktions-Endpunkte (für Output-Genauigkeit)
     TL.push(standzeitNeuJ);
     remanTimes.forEach(t => TL.push(t + standzeitRemanJ));
 
@@ -180,7 +347,7 @@ export default function TCODashboard() {
 
       // OPEX am Jahresende – Diskontsatzwechsel ab erstem REMAN-Event
       if (Math.abs(t1 - Math.round(t1)) <= EPS && t1 >= 1 - EPS && t1 <= p.analysehorizont + EPS) {
-        const discR = (t1 + EPS < firstReman) ? rNeu : rRem; // Fix
+        const discR = (t1 + EPS < firstReman) ? rNeu : rRem;
         tcoReman += pv(p.betriebskosten, discR, t1);
         tcoNeu += pv(p.betriebskosten, rNeu, t1);
       }
@@ -287,7 +454,7 @@ export default function TCODashboard() {
       recyclingComparison: { neu: p.entsorgungNeu, reman: p.entsorgungReman, delta: entsorgDelta },
       neuteilVsReman: { neu: totalNeuStatic, reman: totalRemStatic, delta: totalDelta }
     };
-  }, [params]);
+  }, [params, costs]); // <— reagiert auch auf Einzelkosten
 
   // ===== Eingabefeld (string-basiert) – mit Fokus-Stabilisierung =====
   const InputField = memo(function InputField({ name, label, value, onChange, onCommit }) {
@@ -333,7 +500,6 @@ export default function TCODashboard() {
     />
   );
 
-  // ===== Darstellung =====
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -351,22 +517,35 @@ export default function TCODashboard() {
                 Δ zeigt jeweils den Unterschied REMAN − Neuteil.
               </p>
             </div>
-
-            {/* <img> lädt aus /public */}
-            <img
-              src="/logo.png"
-              alt="Logo"
-              className="h-10 w-auto object-contain opacity-90"
-            />
+            <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain opacity-90" />
           </div>
         </div>
 
         {/* Eingaben */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <Section icon={Factory} title="Parameter Neuteil">
-            {F('herstellkosten', 'Herstellkosten (€)')}
-            {F('inbetriebnahme', 'Inbetriebnahmekosten (€)')}
-            {F('betriebskosten', 'Betriebskosten/Jahr (auch REMAN) (€)')}
+            {/* Itemisierte Felder */}
+            <ItemizedCostField
+              title="Herstellkosten (€)"
+              groupKey="herstellkosten"
+              valueStr={form.herstellkosten}
+              onValueStrChange={(v) => updateForm('herstellkosten', v)}
+              onCommitTotal={() => commitParam('herstellkosten')}
+              costs={costs}
+              setCosts={setCosts}
+              formatCurrency={formatCurrency}
+            />
+            <ItemizedCostField
+              title="Inbetriebnahmekosten (€)"
+              groupKey="inbetriebnahme"
+              valueStr={form.inbetriebnahme}
+              onValueStrChange={(v) => updateForm('inbetriebnahme', v)}
+              onCommitTotal={() => commitParam('inbetriebnahme')}
+              costs={costs}
+              setCosts={setCosts}
+              formatCurrency={formatCurrency}
+            />
+            {/* Normale Felder */}
             {F('entsorgungNeu', 'Verschrottungserlöse/-Kosten (€)')}
             {F('co2KostenNeu', 'CO₂-Kosten (€/t)')}
             {F('standzeitNeu', 'Standzeit Neuteil (Tage)')}
@@ -377,7 +556,18 @@ export default function TCODashboard() {
           </Section>
 
           <Section icon={Recycle} title="Parameter REMAN">
-            {F('remanKosten', 'Kosten je Aufbereitung (€)')}
+            {/* Itemisiertes Feld */}
+            <ItemizedCostField
+              title="Kosten je Aufbereitung (€)"
+              groupKey="remanKosten"
+              valueStr={form.remanKosten}
+              onValueStrChange={(v) => updateForm('remanKosten', v)}
+              onCommitTotal={() => commitParam('remanKosten')}
+              costs={costs}
+              setCosts={setCosts}
+              formatCurrency={formatCurrency}
+            />
+            {/* Normale Felder */}
             {F('entsorgungReman', 'Verschrottungserlöse/-Kosten (€)')}
             {F('co2KostenReman', 'CO₂-Kosten (€/t)')}
             {F('standzeitReman', 'Standzeit REMAN (Tage)')}
@@ -389,6 +579,18 @@ export default function TCODashboard() {
           </Section>
 
           <Section icon={Gauge} title="Allgemein">
+            {/* Itemisiertes Feld für Betriebskosten/Jahr */}
+            <ItemizedCostField
+              title="Betriebskosten/Jahr (auch REMAN) (€)"
+              groupKey="betriebskosten"
+              valueStr={form.betriebskosten}
+              onValueStrChange={(v) => updateForm('betriebskosten', v)}
+              onCommitTotal={() => commitParam('betriebskosten')}
+              costs={costs}
+              setCosts={setCosts}
+              formatCurrency={formatCurrency}
+            />
+            {/* restliche Allgemein-Felder */}
             {F('analysehorizont', 'Analysehorizont (Jahre)')}
             {F('stundenProJahr', 'Betriebsstunden je Jahr')}
             {F('qualitaetsYield', 'Qualitäts-Yield (%)')}
@@ -451,9 +653,7 @@ export default function TCODashboard() {
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="h-4 w-4 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">
-                TCO-Verlauf über Zeit
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900">TCO-Verlauf über Zeit</h3>
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={calculations.tcoData}>
@@ -471,9 +671,7 @@ export default function TCODashboard() {
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center gap-2 mb-2">
               <Scale className="h-4 w-4 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">
-                Kosten je Hub (Cent)
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900">Kosten je Hub (Cent)</h3>
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={calculations.tcoData}>
