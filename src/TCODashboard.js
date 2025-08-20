@@ -455,7 +455,7 @@ export default function TCODashboard() {
               <div className="flex items-center space-x-3 mb-2">
                 <Calculator className="h-8 w-8 text-blue-600" />
                 <h1 className="text-3xl font-bold text-gray-900">
-                  TCO-Analyse: REMAN vs. Neuteil
+                  TCO-Dashboard: REMAN vs. Neuteil
                 </h1>
               </div>
               <p className="text-sm text-gray-600">
