@@ -10,22 +10,45 @@ import {
 /** ---------- Hilfsfunktionen für itemisierte Kosten ---------- */
 const sumItems = (items) => items.reduce((s, it) => s + (Number(String(it.amount).replace(',', '.')) || 0), 0);
 
-/** ---------- Reusable: Feld + Modal für Einzelkosten ---------- */
+/** ---------- Reusable: Feld + Modal für Einzelkosten (mit lokalem Zustand) ---------- */
 function ItemizedCostField({
   title, groupKey,
   valueStr, onValueStrChange, onCommitTotal,
   costs, setCosts, formatCurrency,
-  onOpenChange // <- neu: Elternteil informieren, ob Modal offen ist
+  onOpenChange
 }) {
   const [open, setOpen] = useState(false);
+  // NEU: Lokaler Zustand für die Bearbeitung im Modal, um Re-Rendern der Haupt-App zu vermeiden
+  const [localItems, setLocalItems] = useState([]);
+
+  // Logik für die Anzeige außerhalb des Modals (nutzt weiterhin den globalen Zustand)
   const g = costs[groupKey] || { total: 0, items: [] };
   const items = g.items || [];
   const usesItems = items.length > 0;
   const effective = usesItems ? sumItems(items) : (Number(String(valueStr).replace(',', '.')) || 0);
   const badge = usesItems ? `Σ ${items.length}` : '—';
 
-  const openModal = () => { setOpen(true); onOpenChange?.(true); };
-  const closeModal = () => { setOpen(false); onOpenChange?.(false); };
+  const openModal = () => {
+    // Beim Öffnen, initialisiere den lokalen Zustand mit den aktuellen globalen Werten
+    setLocalItems(g.items || []);
+    setOpen(true);
+    onOpenChange?.(true);
+  };
+
+  const handleApplyChanges = () => {
+    // Nur beim Klick auf "Übernehmen" werden die lokalen Änderungen in den globalen Zustand geschrieben
+    const next = { ...costs };
+    next[groupKey] = { ...(next[groupKey] || { total: 0 }), items: localItems };
+    setCosts(next);
+    setOpen(false);
+    onOpenChange?.(false);
+  };
+
+  const closeModal = () => {
+    // Beim Schließen ohne Übernehmen werden die lokalen Änderungen verworfen
+    setOpen(false);
+    onOpenChange?.(false);
+  };
 
   return (
     <div>
@@ -71,17 +94,17 @@ function ItemizedCostField({
             </div>
 
             <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
-              {items.map((it, idx) => (
+              {/* Die Eingabefelder arbeiten jetzt mit dem LOKALEN Zustand `localItems` */}
+              {localItems.map((it, idx) => (
                 <div key={idx} className="grid grid-cols-12 gap-2">
                   <input
                     className="col-span-7 px-2 py-1 text-sm border rounded-md"
                     placeholder={`Position ${idx + 1}`}
                     value={it.label || ''}
                     onChange={(e) => {
-                      const next = { ...costs };
-                      next[groupKey] = next[groupKey] || { total: 0, items: [] };
-                      next[groupKey].items = items.map((x, i) => i === idx ? { ...x, label: e.target.value } : x);
-                      setCosts(next);
+                      const nextItems = [...localItems];
+                      nextItems[idx] = { ...nextItems[idx], label: e.target.value };
+                      setLocalItems(nextItems);
                     }}
                   />
                   <input
@@ -90,19 +113,15 @@ function ItemizedCostField({
                     inputMode="decimal"
                     value={String(it.amount ?? '')}
                     onChange={(e) => {
-                      const next = { ...costs };
-                      next[groupKey] = next[groupKey] || { total: 0, items: [] };
-                      next[groupKey].items = items.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x);
-                      setCosts(next);
+                      const nextItems = [...localItems];
+                      nextItems[idx] = { ...nextItems[idx], amount: e.target.value };
+                      setLocalItems(nextItems);
                     }}
                   />
                   <button
                     className="col-span-1 text-xs text-red-600"
                     onClick={() => {
-                      const next = { ...costs };
-                      next[groupKey] = next[groupKey] || { total: 0, items: [] };
-                      next[groupKey].items = items.filter((_, i) => i !== idx);
-                      setCosts(next);
+                      setLocalItems(localItems.filter((_, i) => i !== idx));
                     }}
                   >
                     ✕
@@ -114,37 +133,31 @@ function ItemizedCostField({
               <button
                 className="mt-1 text-xs px-2 py-1 rounded bg-gray-100"
                 onClick={() => {
-                  if (items.length >= 8) return;
-                  const next = { ...costs };
-                  next[groupKey] = next[groupKey] || { total: 0, items: [] };
-                  next[groupKey].items = [...items, { label: '', amount: '' }];
-                  setCosts(next);
+                  if (localItems.length >= 8) return;
+                  setLocalItems([...localItems, { label: '', amount: '' }]);
                 }}
-                disabled={items.length >= 8}
+                disabled={localItems.length >= 8}
               >
-                + Position hinzufügen {items.length >= 8 ? '(max. 8)' : ''}
+                + Position hinzufügen {localItems.length >= 8 ? '(max. 8)' : ''}
               </button>
             </div>
 
             <div className="mt-4 flex items-center justify-between">
               <div className="text-sm text-gray-600">
-                Summe Einzelkosten: <b>{formatCurrency(sumItems(items))}</b>
+                Summe Einzelkosten: <b>{formatCurrency(sumItems(localItems))}</b>
               </div>
               <div className="flex gap-2">
                 <button
                   className="px-3 py-1 text-sm rounded border"
                   onClick={() => {
-                    const next = { ...costs };
-                    next[groupKey] = next[groupKey] || { total: 0, items: [] };
-                    next[groupKey].items = [];
-                    setCosts(next);
+                    setLocalItems([]);
                   }}
                 >
                   Einzelkosten löschen
                 </button>
                 <button
                   className="px-3 py-1 text-sm rounded bg-blue-600 text-white"
-                  onClick={closeModal}
+                  onClick={handleApplyChanges}
                 >
                   Übernehmen
                 </button>
@@ -156,6 +169,7 @@ function ItemizedCostField({
     </div>
   );
 }
+
 
 /** ---------- Hauptkomponente ---------- */
 export default function TCODashboard() {
@@ -788,5 +802,4 @@ export default function TCODashboard() {
         </div>
       </div>
     </div>
-  );
-}
+  )
