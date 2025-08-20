@@ -802,4 +802,5 @@ export default function TCODashboard() {
         </div>
       </div>
     </div>
-  )
+  );
+}
