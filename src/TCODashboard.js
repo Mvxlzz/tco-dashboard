@@ -52,7 +52,7 @@ function ItemizedCostField({
         onKeyDown={(e) => { if (e.key === 'Enter') { onCommitTotal(); e.currentTarget.blur(); } }}
         disabled={usesItems}
         className={`w-full px-2 py-1 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500
-                    ${usesItems ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
+                  ${usesItems ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
       />
       <div className="mt-1 text-[11px] text-gray-500">
         Effektiv: <b>{formatCurrency(effective)}</b>{usesItems ? ' (Summe Einzelkosten)' : ' (Direktwert)'}
@@ -167,36 +167,36 @@ export default function TCODashboard() {
     // Neuteil
     herstellkosten: 70000,
     inbetriebnahme: 30000,
-    betriebskosten: 10000,           // gilt für beide Szenarien p.a.
+    betriebskosten: 10000,          // gilt für beide Szenarien p.a.
     entsorgungNeu: -1000,
-    co2KostenNeu: 1000,              // €/t
-    distanzNeu: 200,                 // km
+    co2KostenNeu: 1000,             // €/t
+    distanzNeu: 200,                // km
 
     // REMAN
     remanKosten: 40000,
     entsorgungReman: -1000,
-    co2KostenReman: 200,             // €/t
-    kostensteigerungJeReman: -2.0,   // PRO REMAN-Zyklus (%)
-    distanzReman: 200,               // km
+    co2KostenReman: 200,            // €/t
+    kostensteigerungJeReman: -2.0,  // PRO REMAN-Zyklus (%)
+    distanzReman: 200,              // km
 
     // Zeit & Leistung
-    standzeitNeu: 1460,              // Tage
-    leadTimeNeu: 15,                 // Tage
-    zinssatzNeu: 4.0,                // %
+    standzeitNeu: 1460,             // Tage
+    leadTimeNeu: 15,                // Tage
+    zinssatzNeu: 4.0,               // %
     hubeProStundeNeu: 50,
 
-    standzeitReman: 730,             // Tage
-    leadTimeReman: 30,               // Tage
-    zinssatzReman: 5.0,              // %
+    standzeitReman: 730,            // Tage
+    leadTimeReman: 30,              // Tage
+    zinssatzReman: 5.0,             // %
     hubeProStundeReman: 30,
 
     // Allgemein
-    analysehorizont: 20,             // Jahre
+    analysehorizont: 20,            // Jahre
     stundenProJahr: 4100,
-    qualitaetsYield: 97,             // %
-    performanceYield: 95,            // %
-    inflation: 2.0,                  // %
-    co2Steigerung: 5.0               // % p.a.
+    qualitaetsYield: 97,            // %
+    performanceYield: 95,           // %
+    inflation: 2.0,                 // %
+    co2Steigerung: 5.0              // % p.a.
   });
 
   // ===== String-Formzustand (nur Anzeige/Eingabe) =====
@@ -710,7 +710,7 @@ export default function TCODashboard() {
             <div className="flex items-center gap-2 mb-1">
               <Leaf className="h-4 w-4 text-emerald-600" />
               <h3 className="text-sm font-semibold text-gray-900">
-                CO₂-Kosten <span className="text-gray-500">Δ {formatNumber(calculations.co2Comparison.delta, 0)}</span>
+                CO₂-Kosten <span className="text-gray-500 font-normal">Δ {formatNumber(calculations.co2Comparison.delta, 0)}</span>
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
@@ -730,7 +730,7 @@ export default function TCODashboard() {
             <div className="flex items-center gap-2 mb-1">
               <Clock className="h-4 w-4 text-blue-600" />
               <h3 className="text-sm font-semibold text-gray-900">
-                Lead Time (Tage) <span className="text-gray-500">Δ {formatNumber(calculations.leadTimeComparison.delta, 0)}</span>
+                Lead Time (Tage) <span className="text-gray-500 font-normal">Δ {formatNumber(calculations.leadTimeComparison.delta, 0)}</span>
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
@@ -750,7 +750,7 @@ export default function TCODashboard() {
             <div className="flex items-center gap-2 mb-1">
               <Recycle className="h-4 w-4 text-amber-600" />
               <h3 className="text-sm font-semibold text-gray-900">
-                Entsorgung <span className="text-gray-500">Δ {formatCurrency(calculations.recyclingComparison.delta)}</span>
+                Entsorgung <span className="text-gray-500 font-normal">Δ {formatCurrency(calculations.recyclingComparison.delta)}</span>
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
@@ -770,7 +770,7 @@ export default function TCODashboard() {
             <div className="flex items-center gap-2 mb-1">
               <Factory className="h-4 w-4 text-violet-600" />
               <h3 className="text-sm font-semibold text-gray-900">
-                Gesamtkosten (statisch) <span className="text-gray-500">Δ {formatCurrency(calculations.neuteilVsReman.delta)}</span>
+                Gesamtkosten (statisch) <span className="text-gray-500 font-normal">Δ {formatCurrency(calculations.neuteilVsReman.delta)}</span>
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
