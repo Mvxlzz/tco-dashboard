@@ -14,7 +14,8 @@ const sumItems = (items) => items.reduce((s, it) => s + (Number(String(it.amount
 function ItemizedCostField({
   title, groupKey,
   valueStr, onValueStrChange, onCommitTotal,
-  costs, setCosts, formatCurrency
+  costs, setCosts, formatCurrency,
+  onOpenChange // <- neu: Elternteil informieren, ob Modal offen ist
 }) {
   const [open, setOpen] = useState(false);
   const g = costs[groupKey] || { total: 0, items: [] };
@@ -23,13 +24,16 @@ function ItemizedCostField({
   const effective = usesItems ? sumItems(items) : (Number(String(valueStr).replace(',', '.')) || 0);
   const badge = usesItems ? `Σ ${items.length}` : '—';
 
+  const openModal = () => { setOpen(true); onOpenChange?.(true); };
+  const closeModal = () => { setOpen(false); onOpenChange?.(false); };
+
   return (
     <div>
       {/* Label-Zeile */}
       <div className="flex items-center justify-between">
         <label
           className="block text-xs font-medium text-gray-700 cursor-pointer"
-          onClick={() => setOpen(true)}
+          onClick={openModal}
           title="Einzelkosten bearbeiten"
         >
           {title} <span className="text-gray-400">(klicken für Einzelkosten)</span>
@@ -56,14 +60,14 @@ function ItemizedCostField({
 
       {/* Modal */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center" data-modal-root="1">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
+          <div className="absolute inset-0 bg-black/30" onClick={closeModal} />
           {/* Dialog */}
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-xl p-4">
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-semibold text-gray-900">{title} – Einzelkosten</h4>
-              <button className="text-gray-500 text-sm" onClick={() => setOpen(false)}>Schließen</button>
+              <button className="text-gray-500 text-sm" onClick={closeModal}>Schließen</button>
             </div>
 
             <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
@@ -140,7 +144,7 @@ function ItemizedCostField({
                 </button>
                 <button
                   className="px-3 py-1 text-sm rounded bg-blue-600 text-white"
-                  onClick={() => setOpen(false)}
+                  onClick={closeModal}
                 >
                   Übernehmen
                 </button>
@@ -155,6 +159,9 @@ function ItemizedCostField({
 
 /** ---------- Hauptkomponente ---------- */
 export default function TCODashboard() {
+  // ===== Modal-Status global (verhindert Fokus-Sprünge) =====
+  const [hasOpenModal, setHasOpenModal] = useState(false);
+
   // ===== Standardwerte (wie im Screenshot) =====
   const [params, setParams] = useState({
     // Neuteil
@@ -223,16 +230,24 @@ export default function TCODashboard() {
   };
 
   const restoreFocus = useCallback(() => {
+    // Wenn ein Modal offen ist, niemals Fokus „zurückziehen“
+    if (hasOpenModal) return;
+
     const key = activeKeyRef.current;
     if (!key) return;
     const el = inputRefs.current[key];
     if (!el) return;
+
+    // Falls der Fokus bereits innerhalb eines Modals liegt, nicht stören
+    const ae = document.activeElement;
+    if (ae && ae.closest && ae.closest('[data-modal-root="1"]')) return;
+
     if (document.activeElement !== el) { el.focus({ preventScroll: true }); }
     const { start, end } = caretRef.current || {};
     if (start != null && end != null) {
       try { el.setSelectionRange(start, end); } catch {}
     }
-  }, []);
+  }, [hasOpenModal]);
   useEffect(() => { restoreFocus(); });
 
   // Commit: String -> Number (bei Blur/Enter) + ggf. costs.total syncen
@@ -243,7 +258,6 @@ export default function TCODashboard() {
     const num = Number(normalized);
     setParams(prev => ({ ...prev, [key]: Number.isFinite(num) ? num : 0 }));
 
-    // Wenn es eine der vier itemisierten Gruppen ist UND keine Items existieren:
     if (['herstellkosten','inbetriebnahme','betriebskosten','remanKosten'].includes(key)) {
       setCosts(prev => {
         const g = prev[key] || { total: 0, items: [] };
@@ -268,7 +282,6 @@ export default function TCODashboard() {
 
   // ====== Berechnungen nur wenn params/costs sich ändern ======
   const calculations = useMemo(() => {
-    // pEff = params mit den 4 Kostenfeldern als „effektiv“
     const pEff = { ...params };
     pEff.herstellkosten = effectiveCost('herstellkosten');
     pEff.inbetriebnahme  = effectiveCost('inbetriebnahme');
@@ -534,6 +547,7 @@ export default function TCODashboard() {
               costs={costs}
               setCosts={setCosts}
               formatCurrency={formatCurrency}
+              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
             <ItemizedCostField
               title="Inbetriebnahmekosten (€)"
@@ -544,6 +558,7 @@ export default function TCODashboard() {
               costs={costs}
               setCosts={setCosts}
               formatCurrency={formatCurrency}
+              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
             {/* Normale Felder */}
             {F('entsorgungNeu', 'Verschrottungserlöse/-Kosten (€)')}
@@ -566,6 +581,7 @@ export default function TCODashboard() {
               costs={costs}
               setCosts={setCosts}
               formatCurrency={formatCurrency}
+              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
             {/* Normale Felder */}
             {F('entsorgungReman', 'Verschrottungserlöse/-Kosten (€)')}
@@ -589,6 +605,7 @@ export default function TCODashboard() {
               costs={costs}
               setCosts={setCosts}
               formatCurrency={formatCurrency}
+              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
             {/* restliche Allgemein-Felder */}
             {F('analysehorizont', 'Analysehorizont (Jahre)')}
@@ -697,10 +714,10 @@ export default function TCODashboard() {
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={[
+              <BarChart data=[
                 { name: 'Neuteil', value: calculations.co2Comparison.neu },
                 { name: 'REMAN', value: calculations.co2Comparison.reman }
-              ]}>
+              ]>
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip formatter={(v) => [`${formatNumber(Number(v), 0)} €/t`, 'CO₂-Kosten']} />
@@ -717,10 +734,10 @@ export default function TCODashboard() {
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={[
+              <BarChart data=[
                 { name: 'Neuteil', value: calculations.leadTimeComparison.neu },
                 { name: 'REMAN', value: calculations.leadTimeComparison.reman }
-              ]}>
+              ]>
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip formatter={(v) => [`${formatNumber(Number(v), 0)} Tage`, 'Lead Time']} />
@@ -737,10 +754,10 @@ export default function TCODashboard() {
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={[
+              <BarChart data=[
                 { name: 'Neuteil', value: calculations.recyclingComparison.neu },
                 { name: 'REMAN', value: calculations.recyclingComparison.reman }
-              ]}>
+              ]>
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(v) => formatNumber(Number(v) / 1000) + ' k'} />
                 <Tooltip formatter={(v) => [formatCurrency(Number(v)), 'Entsorgung']} />
@@ -757,10 +774,10 @@ export default function TCODashboard() {
               </h3>
             </div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={[
+              <BarChart data=[
                 { name: 'Neuteil', value: calculations.neuteilVsReman.neu },
                 { name: 'REMAN', value: calculations.neuteilVsReman.reman }
-              ]}>
+              ]>
                 <XAxis dataKey="name" />
                 <YAxis tickFormatter={(v) => formatNumber(Number(v) / 1000) + ' k'} />
                 <Tooltip formatter={(v) => [formatCurrency(Number(v)), 'Summe']} />
