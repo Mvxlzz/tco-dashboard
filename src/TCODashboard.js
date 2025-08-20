@@ -51,23 +51,23 @@ export default function TCODashboard() {
   );
 
   // Nur sichtbare Strings updaten (kein Re-Render der Charts)
-  const updateForm = (key: string, next: string) => {
+  const updateForm = (key, next) => {
     setForm(prev => ({ ...prev, [key]: next }));
   };
 
   // Commit: String -> Number (bei Blur/Enter)
-  const commitParam = (key: string) => {
-    const raw = form[key]?.trim();
-    if (raw === '' || raw === undefined) return; // leer: nichts tun
+  const commitParam = (key) => {
+    const raw = (form[key] ?? '').trim();
+    if (raw === '') return; // leer: nichts tun
     const normalized = raw.replace(',', '.');
     const num = Number(normalized);
     setParams(prev => ({ ...prev, [key]: Number.isFinite(num) ? num : 0 }));
   };
 
-  const formatCurrency = (value: number) =>
+  const formatCurrency = (value) =>
     new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value);
 
-  const formatNumber = (value: number, decimals = 0) =>
+  const formatNumber = (value, decimals = 0) =>
     new Intl.NumberFormat('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
 
   const calculations = useMemo(() => {
@@ -87,7 +87,7 @@ export default function TCODashboard() {
     const periodeNeu = standzeitNeuJ + leadNeuJ;
     const periodeRem = standzeitRemanJ + leadRemJ;
 
-    const pv = (value: number, rate: number, time: number) => {
+    const pv = (value, rate, time) => {
       if (Math.abs(time) < EPS || Math.abs(rate) < EPS) return value;
       return value / Math.pow(1 + rate, time);
     };
@@ -98,12 +98,12 @@ export default function TCODashboard() {
     const tCo2Rem = (2 * p.distanzReman * gPerKm) / 1_000_000;
 
     // Events (Neukauf / Reman)
-    const neukaufTimes: number[] = [];
+    const neukaufTimes = [];
     if (periodeNeu > 0) {
       for (let t = periodeNeu; t <= p.analysehorizont + EPS; t += periodeNeu) neukaufTimes.push(+t.toFixed(10));
     }
 
-    const remanTimes: number[] = [];
+    const remanTimes = [];
     if (periodeRem > 0) {
       for (let t = standzeitNeuJ + leadRemJ; t <= p.analysehorizont + EPS; t += periodeRem) remanTimes.push(+t.toFixed(10));
     }
@@ -111,7 +111,7 @@ export default function TCODashboard() {
     const firstReman = remanTimes.length > 0 ? remanTimes[0] : 1e30;
 
     // Timeline: 0, Jahresenden, (fractionales Endjahr), Events, Produktions-Endpunkte
-    const TL: number[] = [0];
+    const TL = [0];
     for (let j = 1; j <= Math.floor(p.analysehorizont); j++) TL.push(j);
     if (Math.abs(p.analysehorizont - Math.floor(p.analysehorizont)) > EPS) TL.push(p.analysehorizont);
     TL.push(...remanTimes, ...neukaufTimes);
@@ -122,7 +122,7 @@ export default function TCODashboard() {
 
     // sort & unique (mit EPS)
     TL.sort((a, b) => a - b);
-    const uniqueTL: number[] = [];
+    const uniqueTL = [];
     for (let i = 0; i < TL.length; i++) {
       if (i === 0 || Math.abs(TL[i] - TL[i - 1]) > EPS) uniqueTL.push(TL[i]);
     }
@@ -135,7 +135,7 @@ export default function TCODashboard() {
     const q = p.qualitaetsYield / 100;
     const perf = p.performanceYield / 100;
 
-    const data: { time: number; tcoReman: number; tcoNeu: number; costPerOutputReman: number; costPerOutputNeu: number }[] = [];
+    const data = [];
 
     for (let i = 0; i < uniqueTL.length; i++) {
       const t1 = uniqueTL[i];
@@ -168,7 +168,7 @@ export default function TCODashboard() {
       let idxR = -1;
       for (let j = 0; j < remanTimes.length; j++) if (remanTimes[j] <= t0 + 1e-6) idxR = j;
 
-      let prodStartR: number, prodEndR: number, rateRem: number;
+      let prodStartR, prodEndR, rateRem;
       if (idxR === -1) {
         prodStartR = 0; prodEndR = standzeitNeuJ; rateRem = p.hubeProStundeNeu;
       } else {
@@ -182,7 +182,7 @@ export default function TCODashboard() {
       let idxN = -1;
       for (let j = 0; j < neukaufTimes.length; j++) if (neukaufTimes[j] <= t0 + 1e-6) idxN = j;
 
-      let prodStartN: number, prodEndN: number;
+      let prodStartN, prodEndN;
       if (idxN === -1) { prodStartN = 0; prodEndN = standzeitNeuJ; }
       else { prodStartN = neukaufTimes[idxN]; prodEndN = neukaufTimes[idxN] + standzeitNeuJ; }
 
@@ -215,7 +215,7 @@ export default function TCODashboard() {
 
     // Mini-Charts: Werte + Deltas
     const co2NeuNow = p.co2KostenNeu;
-    const co2RemNow = p.co2KostenReman;
+    the const co2RemNow = p.co2KostenReman;
     const co2Delta = co2RemNow - co2NeuNow;
 
     const leadDelta = p.leadTimeReman - p.leadTimeNeu;
@@ -241,15 +241,7 @@ export default function TCODashboard() {
   }, [params]);
 
   // ===== Eingabefeld (string-basiert, commit bei Blur/Enter) =====
-  type InputFieldProps = {
-    label: string;
-    value: string;                        // String!
-    onChange: (v: string) => void;
-    onCommit: () => void;                 // Blur/Enter
-    step?: number | string;
-  };
-
-  const InputField: React.FC<InputFieldProps> = ({ label, value, onChange, onCommit }) => (
+  const InputField = ({ label, value, onChange, onCommit }) => (
     <div>
       <label className="block text-xs font-medium text-gray-700">{label}</label>
       <input
@@ -264,7 +256,7 @@ export default function TCODashboard() {
     </div>
   );
 
-  const Section: React.FC<{ icon: any; title: string; children: React.ReactNode }> = ({ icon: Icon, title, children }) => (
+  const Section = ({ icon: Icon, title, children }) => (
     <div className="bg-white rounded-lg shadow-sm p-4">
       <div className="flex items-center gap-2 mb-3">
         <Icon className="h-4 w-4 text-gray-600" />
@@ -354,7 +346,7 @@ export default function TCODashboard() {
         {/* Verlauf-Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-2">
               <TrendingUp className="h-4 w-4 text-gray-600" />
               <h3 className="text-lg font-semibold text-gray-900">
                 TCO-Verlauf über Zeit
@@ -364,7 +356,7 @@ export default function TCODashboard() {
               <LineChart data={calculations.tcoData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="time" />
-                <YAxis tickFormatter={(v) => formatNumber((v as number) / 1000) + ' k'} />
+                <YAxis tickFormatter={(v) => formatNumber(Number(v) / 1000) + ' k'} />
                 <Tooltip formatter={(v) => (typeof v === 'number' ? formatCurrency(v) : v)} />
                 <Legend />
                 <Line type="stepAfter" dataKey="tcoReman" stroke="#10b981" strokeWidth={2} name="Mit REMAN" dot={false} />
@@ -374,7 +366,7 @@ export default function TCODashboard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-2">
               <Scale className="h-4 w-4 text-gray-600" />
               <h3 className="text-lg font-semibold text-gray-900">
                 Kosten je Hub (Cent)
@@ -397,7 +389,7 @@ export default function TCODashboard() {
         {/* Mini-Bar-Charts mit Tooltips und Δ im Titel */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-1">
               <Leaf className="h-4 w-4 text-emerald-600" />
               <h3 className="text-sm font-semibold text-gray-900">
                 CO₂-Kosten <span className="text-gray-500">Δ {formatNumber(calculations.co2Comparison.delta, 0)}</span>
@@ -410,14 +402,14 @@ export default function TCODashboard() {
               ]}>
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip formatter={(v) => [`${formatNumber(v as number, 0)} €/t`, 'CO₂-Kosten']} />
+                <Tooltip formatter={(v) => [`${formatNumber(Number(v), 0)} €/t`, 'CO₂-Kosten']} />
                 <Bar dataKey="value" fill="#10b981" />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-1">
               <Clock className="h-4 w-4 text-blue-600" />
               <h3 className="text-sm font-semibold text-gray-900">
                 Lead Time (Tage) <span className="text-gray-500">Δ {formatNumber(calculations.leadTimeComparison.delta, 0)}</span>
@@ -430,14 +422,14 @@ export default function TCODashboard() {
               ]}>
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip formatter={(v) => [`${formatNumber(v as number, 0)} Tage`, 'Lead Time']} />
+                <Tooltip formatter={(v) => [`${formatNumber(Number(v), 0)} Tage`, 'Lead Time']} />
                 <Bar dataKey="value" fill="#3b82f6" />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-1">
               <Recycle className="h-4 w-4 text-amber-600" />
               <h3 className="text-sm font-semibold text-gray-900">
                 Entsorgung <span className="text-gray-500">Δ {formatCurrency(calculations.recyclingComparison.delta)}</span>
@@ -449,15 +441,15 @@ export default function TCODashboard() {
                 { name: 'REMAN', value: calculations.recyclingComparison.reman }
               ]}>
                 <XAxis dataKey="name" />
-                <YAxis tickFormatter={(v) => formatNumber((v as number) / 1000) + ' k'} />
-                <Tooltip formatter={(v) => [formatCurrency(v as number), 'Entsorgung']} />
+                <YAxis tickFormatter={(v) => formatNumber(Number(v) / 1000) + ' k'} />
+                <Tooltip formatter={(v) => [formatCurrency(Number(v)), 'Entsorgung']} />
                 <Bar dataKey="value" fill="#f59e0b" />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items={{ alignItems: 'center' }} gap-2 mb-1">
               <Factory className="h-4 w-4 text-violet-600" />
               <h3 className="text-sm font-semibold text-gray-900">
                 Gesamtkosten (statisch) <span className="text-gray-500">Δ {formatCurrency(calculations.neuteilVsReman.delta)}</span>
@@ -469,8 +461,8 @@ export default function TCODashboard() {
                 { name: 'REMAN', value: calculations.neuteilVsReman.reman }
               ]}>
                 <XAxis dataKey="name" />
-                <YAxis tickFormatter={(v) => formatNumber((v as number) / 1000) + ' k'} />
-                <Tooltip formatter={(v) => [formatCurrency(v as number), 'Summe']} />
+                <YAxis tickFormatter={(v) => formatNumber(Number(v) / 1000) + ' k'} />
+                <Tooltip formatter={(v) => [formatCurrency(Number(v)), 'Summe']} />
                 <Bar dataKey="value" fill="#8b5cf6" />
               </BarChart>
             </ResponsiveContainer>
