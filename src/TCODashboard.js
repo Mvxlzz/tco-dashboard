@@ -11,7 +11,8 @@ import {
 const sumItems = (items) => items.reduce((s, it) => s + (Number(String(it.amount).replace(',', '.')) || 0), 0);
 
 /** ---------- Reusable: Feld + Modal für Einzelkosten (mit lokalem Zustand) ---------- */
-function ItemizedCostField({
+// FOKUS-FIX: Komponente mit React.memo umhüllt, um unnötige Re-Renders zu verhindern
+const ItemizedCostField = memo(function ItemizedCostField({
   title, groupKey,
   valueStr, onValueStrChange, onCommitTotal,
   costs, setCosts, formatCurrency,
@@ -34,7 +35,6 @@ function ItemizedCostField({
 
   const handleApplyChanges = () => {
     const next = { ...costs };
-    // Bereinige leere Items vor dem Speichern
     const cleanedItems = localItems.filter(it => (it.label || '').trim() !== '' || (it.amount || '') !== '');
     next[groupKey] = { ...(next[groupKey] || { total: 0 }), items: cleanedItems };
     setCosts(next);
@@ -50,7 +50,6 @@ function ItemizedCostField({
   return (
     <div>
       <div className="flex items-center justify-between">
-        {/* --- UI-ANPASSUNG: Titel ist jetzt der klickbare Link --- */}
         <label
           onClick={openModal}
           title="Einzelkosten bearbeiten"
@@ -153,7 +152,7 @@ function ItemizedCostField({
       )}
     </div>
   );
-}
+});
 
 
 /** ---------- Hauptkomponente ---------- */
@@ -237,12 +236,18 @@ export default function TCODashboard() {
     }
   }, []);
 
-  // --- FOKUS-FIX: Stabile Handler-Funktion, die Commit und Blur kombiniert ---
   const handleCommitAndBlur = useCallback((key) => {
     commitParam(key);
     activeKeyRef.current = null;
   }, [commitParam]);
 
+  // FOKUS-FIX: Stabile Callback-Funktion für das Öffnen/Schließen des Modals
+  const handleModalOpenChange = useCallback((open) => {
+    setHasOpenModal(open);
+    if (open) {
+      activeKeyRef.current = null;
+    }
+  }, []);
 
   const formatCurrency = (value) =>
     new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value);
@@ -355,7 +360,7 @@ export default function TCODashboard() {
           value={value}
           onFocus={() => { activeKeyRef.current = name; }}
           onChange={(e) => onChange(name, e.target.value, e)}
-          onBlur={() => onCommit(name)} // Ruft jetzt handleCommitAndBlur auf
+          onBlur={() => onCommit(name)}
           onKeyDown={(e) => { if (e.key === 'Enter') { onCommit(name); e.currentTarget.blur(); } }}
           className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
@@ -380,7 +385,7 @@ export default function TCODashboard() {
       label={label}
       value={form[name]}
       onChange={updateForm}
-      onCommit={handleCommitAndBlur} // FOKUS-FIX: Stabile Funktion übergeben
+      onCommit={handleCommitAndBlur}
     />
   );
 
@@ -411,18 +416,18 @@ export default function TCODashboard() {
               groupKey="herstellkosten"
               valueStr={form.herstellkosten}
               onValueStrChange={updateForm}
-              onCommitTotal={handleCommitAndBlur} // FOKUS-FIX
+              onCommitTotal={handleCommitAndBlur}
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
-              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
+              onOpenChange={handleModalOpenChange} // FOKUS-FIX
             />
             <ItemizedCostField
               title="Inbetriebnahmekosten (€)"
               groupKey="inbetriebnahme"
               valueStr={form.inbetriebnahme}
               onValueStrChange={updateForm}
-              onCommitTotal={handleCommitAndBlur} // FOKUS-FIX
+              onCommitTotal={handleCommitAndBlur}
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
-              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
+              onOpenChange={handleModalOpenChange} // FOKUS-FIX
             />
             {F('entsorgungNeu', 'Verschrottungserlöse/-Kosten (€)')}
             {F('co2KostenNeu', 'CO₂-Kosten (€/t)')}
@@ -439,9 +444,9 @@ export default function TCODashboard() {
               groupKey="remanKosten"
               valueStr={form.remanKosten}
               onValueStrChange={updateForm}
-              onCommitTotal={handleCommitAndBlur} // FOKUS-FIX
+              onCommitTotal={handleCommitAndBlur}
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
-              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
+              onOpenChange={handleModalOpenChange} // FOKUS-FIX
             />
             {F('entsorgungReman', 'Verschrottungserlöse/-Kosten (€)')}
             {F('co2KostenReman', 'CO₂-Kosten (€/t)')}
@@ -459,9 +464,9 @@ export default function TCODashboard() {
               groupKey="betriebskosten"
               valueStr={form.betriebskosten}
               onValueStrChange={updateForm}
-              onCommitTotal={handleCommitAndBlur} // FOKUS-FIX
+              onCommitTotal={handleCommitAndBlur}
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
-              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
+              onOpenChange={handleModalOpenChange} // FOKUS-FIX
             />
             {F('analysehorizont', 'Analysehorizont (Jahre)')}
             {F('stundenProJahr', 'Betriebsstunden je Jahr')}
