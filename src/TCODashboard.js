@@ -230,7 +230,7 @@ export default function TCODashboard() {
   };
 
   const restoreFocus = useCallback(() => {
-    // Wenn ein Modal offen ist, niemals Fokus „zurückziehen“
+    // Wenn ein Modal offen ist, niemals Fokus „zurückziehen"
     if (hasOpenModal) return;
 
     const key = activeKeyRef.current;
