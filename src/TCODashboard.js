@@ -8,11 +8,11 @@ import {
 } from 'lucide-react';
 
 /** ---------- Hilfsfunktionen für itemisierte Kosten ---------- */
-const sumItems = (items) => items.reduce((s, it) => s + (Number(String(it.amount).replace(',', '.')) || 0), 0);
+const sumItems = (items) =>
+  items.reduce((s, it) => s + (Number(String(it.amount).replace(',', '.')) || 0), 0);
 
 /** ---------- Reusable: Feld + Modal für Einzelkosten (mit lokalem Zustand) ---------- */
-// FOKUS-FIX: Komponente mit React.memo umhüllt, um unnötige Re-Renders zu verhindern
-const ItemizedCostField = memo(function ItemizedCostField({
+function ItemizedCostField({
   title, groupKey,
   valueStr, onValueStrChange, onCommitTotal,
   costs, setCosts, formatCurrency,
@@ -35,8 +35,7 @@ const ItemizedCostField = memo(function ItemizedCostField({
 
   const handleApplyChanges = () => {
     const next = { ...costs };
-    const cleanedItems = localItems.filter(it => (it.label || '').trim() !== '' || (it.amount || '') !== '');
-    next[groupKey] = { ...(next[groupKey] || { total: 0 }), items: cleanedItems };
+    next[groupKey] = { ...(next[groupKey] || { total: 0 }), items: localItems };
     setCosts(next);
     setOpen(false);
     onOpenChange?.(false);
@@ -49,16 +48,20 @@ const ItemizedCostField = memo(function ItemizedCostField({
 
   return (
     <div>
+      {/* Label-Zeile (Label selbst ist klickbar) */}
       <div className="flex items-center justify-between">
-        <label
+        <button
+          type="button"
           onClick={openModal}
+          className="text-left block text-xs font-medium text-blue-700 underline decoration-dotted hover:text-blue-800 cursor-pointer"
           title="Einzelkosten bearbeiten"
-          className="block text-xs font-medium text-gray-700 cursor-pointer hover:text-blue-600 hover:underline decoration-dotted"
         >
           {title}
-        </label>
+        </button>
         <span className="text-[10px] px-2 py-[2px] rounded-full bg-gray-100 text-gray-600">{badge}</span>
       </div>
+
+      {/* Direktwert-Eingabe (deaktiviert, wenn Items existieren) */}
       <input
         type="text"
         inputMode="decimal"
@@ -137,7 +140,7 @@ const ItemizedCostField = memo(function ItemizedCostField({
                   className="px-3 py-1 text-sm rounded border"
                   onClick={() => setLocalItems([])}
                 >
-                  Alle löschen
+                  Einzelkosten löschen
                 </button>
                 <button
                   className="px-3 py-1 text-sm rounded bg-blue-600 text-white"
@@ -152,8 +155,7 @@ const ItemizedCostField = memo(function ItemizedCostField({
       )}
     </div>
   );
-});
-
+}
 
 /** ---------- Hauptkomponente ---------- */
 export default function TCODashboard() {
@@ -184,10 +186,9 @@ export default function TCODashboard() {
   const inputRefs = useRef({});
   const activeKeyRef = useRef(null);
   const caretRef = useRef({ start: null, end: null });
+
   const formRef = useRef(form);
-  useEffect(() => {
-    formRef.current = form;
-  }, [form]);
+  useEffect(() => { formRef.current = form; }, [form]);
 
   const setInputRef = (key, el) => { if (el) inputRefs.current[key] = el; };
 
@@ -201,24 +202,23 @@ export default function TCODashboard() {
     activeKeyRef.current = key;
   }, []);
 
+  /** Fokus-Keeper: nur Caret setzen, niemals aktiv fokussieren */
   const restoreFocus = useCallback(() => {
     if (hasOpenModal) return;
     const key = activeKeyRef.current;
     if (!key) return;
     const el = inputRefs.current[key];
     if (!el) return;
-    const ae = document.activeElement;
-    if (ae && ae.closest && ae.closest('[data-modal-root="1"]')) return;
-    if (document.activeElement !== el) { el.focus({ preventScroll: true }); }
+
+    // Nur wenn das Feld bereits den Fokus hat, die Caret-Position sanft nachziehen
+    if (document.activeElement !== el) return;
     const { start, end } = caretRef.current || {};
     if (start != null && end != null) {
       try { el.setSelectionRange(start, end); } catch {}
     }
   }, [hasOpenModal]);
 
-  useEffect(() => {
-    restoreFocus();
-  });
+  useEffect(() => { restoreFocus(); });
 
   const commitParam = useCallback((key) => {
     const currentForm = formRef.current;
@@ -230,28 +230,14 @@ export default function TCODashboard() {
     if (['herstellkosten','inbetriebnahme','betriebskosten','remanKosten'].includes(key)) {
       setCosts(prev => {
         const g = prev[key] || { total: 0, items: [] };
-        if (g.items && g.items.length > 0) return prev;
+        if (g.items && g.items.length > 0) return prev; // Items haben Vorrang
         return { ...prev, [key]: { ...g, total: Number.isFinite(num) ? num : 0 } };
       });
     }
   }, []);
 
-  const handleCommitAndBlur = useCallback((key) => {
-    commitParam(key);
-    activeKeyRef.current = null;
-  }, [commitParam]);
-
-  // FOKUS-FIX: Stabile Callback-Funktion für das Öffnen/Schließen des Modals
-  const handleModalOpenChange = useCallback((open) => {
-    setHasOpenModal(open);
-    if (open) {
-      activeKeyRef.current = null;
-    }
-  }, []);
-
   const formatCurrency = (value) =>
     new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value);
-
   const formatNumber = (value, decimals = 0) =>
     new Intl.NumberFormat('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
 
@@ -267,84 +253,130 @@ export default function TCODashboard() {
     pEff.inbetriebnahme  = effectiveCost('inbetriebnahme');
     pEff.betriebskosten  = effectiveCost('betriebskosten');
     pEff.remanKosten     = effectiveCost('remanKosten');
+
     const p = pEff;
     const EPS = 1e-6;
+
     const standzeitNeuJ = p.standzeitNeu / 365;
     const standzeitRemanJ = p.standzeitReman / 365;
     const leadNeuJ = p.leadTimeNeu / 365;
     const leadRemJ = p.leadTimeReman / 365;
+
     const rNeu = (1 + p.zinssatzNeu / 100) / (1 + p.inflation / 100) - 1;
     const rRem = (1 + p.zinssatzReman / 100) / (1 + p.inflation / 100) - 1;
+
     const periodeNeu = standzeitNeuJ + leadNeuJ;
     const periodeRem = standzeitRemanJ + leadRemJ;
-    const pv = (value, rate, time) => {
-        if (Math.abs(time) < EPS || Math.abs(rate) < EPS) return value;
-        return value / Math.pow(1 + rate, time);
-    };
+
+    const pv = (value, rate, time) => value / Math.pow(1 + rate, time);
+
     const gPerKm = 490;
     const tCo2Neu = (2 * p.distanzNeu * gPerKm) / 1_000_000;
     const tCo2Rem = (2 * p.distanzReman * gPerKm) / 1_000_000;
+
     const neukaufTimes = [];
     if (periodeNeu > 0) for (let t = periodeNeu; t <= p.analysehorizont + EPS; t += periodeNeu) neukaufTimes.push(+t.toFixed(10));
+
     const remanTimes = [];
     if (periodeRem > 0) for (let t = standzeitNeuJ + leadRemJ; t <= p.analysehorizont + EPS; t += periodeRem) remanTimes.push(+t.toFixed(10));
+
     const firstReman = remanTimes.length > 0 ? remanTimes[0] : 1e30;
+
     const TL = [0];
     for (let j = 1; j <= Math.floor(p.analysehorizont); j++) TL.push(j);
     TL.push(p.analysehorizont, ...remanTimes, ...neukaufTimes, standzeitNeuJ);
     remanTimes.forEach(t => TL.push(t + standzeitRemanJ));
-    
-    TL.sort((a, b) => a - b);
-    const uniqueTL = [];
-    for (let i = 0; i < TL.length; i++) {
-        if (i === 0 || Math.abs(TL[i] - TL[i - 1]) > EPS) uniqueTL.push(TL[i]);
-    }
+
+    const uniqueTL = [...new Set(TL.sort((a, b) => a - b))];
 
     let tcoReman = p.herstellkosten + p.inbetriebnahme;
     let tcoNeu = p.herstellkosten + p.inbetriebnahme;
     let outRem = 0, outNeu = 0;
+
     const H = p.stundenProJahr, q = p.qualitaetsYield / 100, perf = p.performanceYield / 100;
     const data = [];
+
     for (let i = 0; i < uniqueTL.length; i++) {
       const t1 = uniqueTL[i], t0 = i > 0 ? uniqueTL[i - 1] : 0;
+
       if (Math.abs(t1 - Math.round(t1)) <= EPS && t1 >= 1) {
         const discR = (t1 + EPS < firstReman) ? rNeu : rRem;
         tcoReman += pv(p.betriebskosten, discR, t1);
         tcoNeu += pv(p.betriebskosten, rNeu, t1);
       }
+
       if (remanTimes.some(rt => Math.abs(rt - t1) <= EPS)) {
         const k = remanTimes.findIndex(rt => Math.abs(rt - t1) <= EPS) + 1;
         const mult = 1 + (k - 1) * (p.kostensteigerungJeReman / 100);
         const co2R = tCo2Rem * (p.co2KostenReman * Math.pow(1 + p.co2Steigerung / 100, t1));
         tcoReman += pv(p.remanKosten * mult + co2R, rRem, t1);
       }
+
       if (neukaufTimes.some(nt => Math.abs(nt - t1) <= EPS)) {
         const co2N = tCo2Neu * (p.co2KostenNeu * Math.pow(1 + p.co2Steigerung / 100, t1));
         tcoNeu += pv(p.entsorgungNeu + p.herstellkosten + p.inbetriebnahme + co2N, rNeu, t1);
       }
+
       let idxR = remanTimes.findLastIndex(rt => rt <= t0 + EPS);
-      let prodStartR = idxR === -1 ? 0 : remanTimes[idxR], prodEndR = idxR === -1 ? standzeitNeuJ : remanTimes[idxR] + standzeitRemanJ;
-      let rateRem = idxR === -1 ? p.hubeProStundeNeu : p.hubeProStundeReman;
+      let prodStartR = idxR === -1 ? 0 : remanTimes[idxR],
+          prodEndR   = idxR === -1 ? standzeitNeuJ : remanTimes[idxR] + standzeitRemanJ;
+      let rateRem   = idxR === -1 ? p.hubeProStundeNeu : p.hubeProStundeReman;
+
       outRem += Math.max(0, Math.min(t1, prodEndR) - Math.max(t0, prodStartR)) * H * rateRem * q * perf;
+
       let idxN = neukaufTimes.findLastIndex(nt => nt <= t0 + EPS);
-      let prodStartN = idxN === -1 ? 0 : neukaufTimes[idxN], prodEndN = prodStartN + standzeitNeuJ;
+      let prodStartN = idxN === -1 ? 0 : neukaufTimes[idxN],
+          prodEndN   = prodStartN + standzeitNeuJ;
+
       outNeu += Math.max(0, Math.min(t1, prodEndN) - Math.max(t0, prodStartN)) * H * p.hubeProStundeNeu * q * perf;
-      data.push({ time: t1, tcoReman, tcoNeu, costPerOutputReman: outRem > 0 ? (tcoReman / outRem) * 100 : 0, costPerOutputNeu: outNeu > 0 ? (tcoNeu / outNeu) * 100 : 0 });
+
+      data.push({
+        time: t1,
+        tcoReman,
+        tcoNeu,
+        costPerOutputReman: outRem > 0 ? (tcoReman / outRem) * 100 : 0,
+        costPerOutputNeu:   outNeu > 0 ? (tcoNeu   / outNeu)   * 100 : 0
+      });
     }
+
     tcoReman += pv(p.entsorgungReman, rRem, p.analysehorizont);
-    tcoNeu += pv(p.entsorgungNeu, rNeu, p.analysehorizont);
+    tcoNeu   += pv(p.entsorgungNeu,   rNeu, p.analysehorizont);
+
     if (data.length) {
       const last = data[data.length - 1];
-      last.tcoReman = tcoReman; last.tcoNeu = tcoNeu;
+      last.tcoReman = tcoReman;
+      last.tcoNeu = tcoNeu;
       last.costPerOutputReman = outRem > 0 ? (tcoReman / outRem) * 100 : 0;
-      last.costPerOutputNeu = outNeu > 0 ? (tcoNeu / outNeu) * 100 : 0;
+      last.costPerOutputNeu   = outNeu > 0 ? (tcoNeu   / outNeu)   * 100 : 0;
     }
+
     const finalPoint = data[data.length - 1] || {};
-    const finalTcoReman = finalPoint.tcoReman || 0, finalTcoNeu = finalPoint.tcoNeu || 0;
-    const savings = finalTcoNeu - finalTcoReman, savingsPercent = finalTcoNeu > 0 ? (savings / finalTcoNeu) * 100 : 0;
-    const kphReman = finalPoint.costPerOutputReman || 0, kphNeu = finalPoint.costPerOutputNeu || 0;
-    const kphDelta = kphReman - kphNeu, kphDeltaPct = kphNeu !== 0 ? (kphDelta / kphNeu) * 100 : 0;
-    return { tcoData: data, finalTcoReman, finalTcoNeu, savings, savingsPercent, kphReman, kphNeu, kphDelta, kphDeltaPct, leadTimeComparison: { neu: p.leadTimeNeu, reman: p.leadTimeReman, delta: p.leadTimeReman - p.leadTimeNeu }, co2Comparison: { neu: p.co2KostenNeu, reman: p.co2KostenReman, delta: p.co2KostenReman - p.co2KostenNeu }, recyclingComparison: { neu: p.entsorgungNeu, reman: p.entsorgungReman, delta: p.entsorgungReman - p.entsorgungNeu }, neuteilVsReman: { neu: p.herstellkosten + p.inbetriebnahme + p.betriebskosten + p.entsorgungNeu + p.co2KostenNeu, reman: p.remanKosten + p.entsorgungReman + p.co2KostenReman, delta: (p.remanKosten + p.entsorgungReman + p.co2KostenReman) - (p.herstellkosten + p.inbetriebnahme + p.betriebskosten + p.entsorgungNeu + p.co2KostenNeu) } };
+    const finalTcoReman = finalPoint.tcoReman || 0;
+    const finalTcoNeu   = finalPoint.tcoNeu   || 0;
+    const savings = finalTcoNeu - finalTcoReman;
+    const savingsPercent = finalTcoNeu > 0 ? (savings / finalTcoNeu) * 100 : 0;
+
+    const kphReman = finalPoint.costPerOutputReman || 0;
+    const kphNeu   = finalPoint.costPerOutputNeu   || 0;
+    const kphDelta = kphReman - kphNeu;
+    const kphDeltaPct = kphNeu !== 0 ? (kphDelta / kphNeu) * 100 : 0;
+
+    return {
+      tcoData: data,
+      finalTcoReman,
+      finalTcoNeu,
+      savings,
+      savingsPercent,
+      kphReman, kphNeu, kphDelta, kphDeltaPct,
+      leadTimeComparison: { neu: p.leadTimeNeu, reman: p.leadTimeReman, delta: p.leadTimeReman - p.leadTimeNeu },
+      co2Comparison:      { neu: p.co2KostenNeu, reman: p.co2KostenReman, delta: p.co2KostenReman - p.co2KostenNeu },
+      recyclingComparison:{ neu: p.entsorgungNeu, reman: p.entsorgungReman, delta: p.entsorgungReman - p.entsorgungNeu },
+      neuteilVsReman:     {
+        neu: p.herstellkosten + p.inbetriebnahme + p.betriebskosten + p.entsorgungNeu + p.co2KostenNeu,
+        reman: p.remanKosten + p.entsorgungReman + p.co2KostenReman,
+        delta: (p.remanKosten + p.entsorgungReman + p.co2KostenReman) - (p.herstellkosten + p.inbetriebnahme + p.betriebskosten + p.entsorgungNeu + p.co2KostenNeu)
+      }
+    };
   }, [params, costs]);
 
   const InputField = memo(function InputField({ name, label, value, onChange, onCommit }) {
@@ -385,30 +417,28 @@ export default function TCODashboard() {
       label={label}
       value={form[name]}
       onChange={updateForm}
-      onCommit={handleCommitAndBlur}
+      onCommit={commitParam}
     />
   );
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center space-x-3 mb-2">
                 <Calculator className="h-8 w-8 text-blue-600" />
-                <h1 className="text-3xl font-bold text-gray-900">
-                  TCO-Analyse: REMAN vs. Neuteil
-                </h1>
+                <h1 className="text-3xl font-bold text-gray-900">TCO-Analyse: REMAN vs. Neuteil</h1>
               </div>
-              <p className="text-sm text-gray-600">
-                Δ zeigt jeweils den Unterschied REMAN − Neuteil.
-              </p>
+              <p className="text-sm text-gray-600">Δ zeigt jeweils den Unterschied REMAN − Neuteil.</p>
             </div>
             <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain opacity-90" />
           </div>
         </div>
 
+        {/* Eingaben */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <Section icon={Factory} title="Parameter Neuteil">
             <ItemizedCostField
@@ -416,18 +446,18 @@ export default function TCODashboard() {
               groupKey="herstellkosten"
               valueStr={form.herstellkosten}
               onValueStrChange={updateForm}
-              onCommitTotal={handleCommitAndBlur}
+              onCommitTotal={commitParam}
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
-              onOpenChange={handleModalOpenChange} // FOKUS-FIX
+              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
             <ItemizedCostField
               title="Inbetriebnahmekosten (€)"
               groupKey="inbetriebnahme"
               valueStr={form.inbetriebnahme}
               onValueStrChange={updateForm}
-              onCommitTotal={handleCommitAndBlur}
+              onCommitTotal={commitParam}
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
-              onOpenChange={handleModalOpenChange} // FOKUS-FIX
+              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
             {F('entsorgungNeu', 'Verschrottungserlöse/-Kosten (€)')}
             {F('co2KostenNeu', 'CO₂-Kosten (€/t)')}
@@ -444,9 +474,9 @@ export default function TCODashboard() {
               groupKey="remanKosten"
               valueStr={form.remanKosten}
               onValueStrChange={updateForm}
-              onCommitTotal={handleCommitAndBlur}
+              onCommitTotal={commitParam}
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
-              onOpenChange={handleModalOpenChange} // FOKUS-FIX
+              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
             {F('entsorgungReman', 'Verschrottungserlöse/-Kosten (€)')}
             {F('co2KostenReman', 'CO₂-Kosten (€/t)')}
@@ -464,9 +494,9 @@ export default function TCODashboard() {
               groupKey="betriebskosten"
               valueStr={form.betriebskosten}
               onValueStrChange={updateForm}
-              onCommitTotal={handleCommitAndBlur}
+              onCommitTotal={commitParam}
               costs={costs} setCosts={setCosts} formatCurrency={formatCurrency}
-              onOpenChange={handleModalOpenChange} // FOKUS-FIX
+              onOpenChange={(open) => { setHasOpenModal(open); if (open) activeKeyRef.current = null; }}
             />
             {F('analysehorizont', 'Analysehorizont (Jahre)')}
             {F('stundenProJahr', 'Betriebsstunden je Jahr')}
@@ -477,52 +507,55 @@ export default function TCODashboard() {
           </Section>
         </div>
 
+        {/* KPI-Kacheln */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-xs font-medium text-gray-600">TCO REMAN</p>
-                <p className="text-xl font-bold text-green-600">{formatCurrency(calculations.finalTcoReman)}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-xs font-medium text-gray-600">TCO Neuteil</p>
-                <p className="text-xl font-bold text-blue-600">{formatCurrency(calculations.finalTcoNeu)}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-xs font-medium text-gray-600">Einsparung</p>
-                <p className={`text-xl font-bold ${calculations.savings > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(calculations.savings)}
-                </p>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-xs font-medium text-gray-600">Einsparung %</p>
-                <p className={`text-xl font-bold ${calculations.savings > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatNumber(calculations.savingsPercent, 1)}%
-                </p>
-            </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">TCO REMAN</p>
+            <p className="text-xl font-bold text-green-600">{formatCurrency(calculations.finalTcoReman)}</p>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">TCO Neuteil</p>
+            <p className="text-xl font-bold text-blue-600">{formatCurrency(calculations.finalTcoNeu)}</p>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">Einsparung</p>
+            <p className={`text-xl font-bold ${calculations.savings > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatCurrency(calculations.savings)}
+            </p>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">Einsparung %</p>
+            <p className={`text-xl font-bold ${calculations.savings > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatNumber(calculations.savingsPercent, 1)}%
+            </p>
+          </div>
         </div>
 
+        {/* KPI-Kacheln (Kosten/Hub) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-xs font-medium text-gray-600">Kosten/Hub REMAN</p>
-                <p className="text-xl font-bold text-green-600">{formatNumber(calculations.kphReman, 2)} Cent</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-xs font-medium text-gray-600">Kosten/Hub Neuteil</p>
-                <p className="text-xl font-bold text-blue-600">{formatNumber(calculations.kphNeu, 2)} Cent</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-xs font-medium text-gray-600">Δ Kosten/Hub</p>
-                <p className={`text-xl font-bold ${calculations.kphDelta <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatNumber(calculations.kphDelta, 2)} Cent
-                </p>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm p-4">
-                <p className="text-xs font-medium text-gray-600">Δ Kosten/Hub %</p>
-                <p className={`text-xl font-bold ${calculations.kphDeltaPct <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatNumber(calculations.kphDeltaPct, 1)}%
-                </p>
-            </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">Kosten/Hub REMAN</p>
+            <p className="text-xl font-bold text-green-600">{formatNumber(calculations.kphReman, 2)} Cent</p>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">Kosten/Hub Neuteil</p>
+            <p className="text-xl font-bold text-blue-600">{formatNumber(calculations.kphNeu, 2)} Cent</p>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">Δ Kosten/Hub</p>
+            <p className={`text-xl font-bold ${calculations.kphDelta <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatNumber(calculations.kphDelta, 2)} Cent
+            </p>
+          </div>
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <p className="text-xs font-medium text-gray-600">Δ Kosten/Hub %</p>
+            <p className={`text-xl font-bold ${calculations.kphDeltaPct <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatNumber(calculations.kphDeltaPct, 1)}%
+            </p>
+          </div>
         </div>
 
+        {/* Verlauf-Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center gap-2 mb-2">
@@ -541,6 +574,7 @@ export default function TCODashboard() {
               </LineChart>
             </ResponsiveContainer>
           </div>
+
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center gap-2 mb-2">
               <Scale className="h-4 w-4 text-gray-600" />
@@ -560,6 +594,7 @@ export default function TCODashboard() {
           </div>
         </div>
 
+        {/* Mini-Bar-Charts */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-sm p-4">
             <div className="flex items-center gap-2 mb-1">
@@ -577,6 +612,7 @@ export default function TCODashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+
           <div className="bg-white rounded-lg shadow-sm p-4">
             <div className="flex items-center gap-2 mb-1">
               <Clock className="h-4 w-4 text-blue-600" />
@@ -593,6 +629,7 @@ export default function TCODashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+
           <div className="bg-white rounded-lg shadow-sm p-4">
             <div className="flex items-center gap-2 mb-1">
               <Recycle className="h-4 w-4 text-amber-600" />
@@ -609,6 +646,7 @@ export default function TCODashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+
           <div className="bg-white rounded-lg shadow-sm p-4">
             <div className="flex items-center gap-2 mb-1">
               <Factory className="h-4 w-4 text-violet-600" />
