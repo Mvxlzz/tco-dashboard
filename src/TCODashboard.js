@@ -8,41 +8,41 @@ import {
 } from 'lucide-react';
 
 export default function TCODashboard() {
-  // ===== Zahlenzustand für Berechnungen =====
+  // ===== Standardwerte (wie im Screenshot) =====
   const [params, setParams] = useState({
     // Neuteil
-    herstellkosten: 50000,
-    inbetriebnahme: 15000,
-    betriebskosten: 8000,            // gilt für beide Szenarien p.a.
-    entsorgungNeu: 2000,
-    co2KostenNeu: 500,               // €/t
-    distanzNeu: 500,                 // km
+    herstellkosten: 70000,
+    inbetriebnahme: 30000,
+    betriebskosten: 10000,           // gilt für beide Szenarien p.a.
+    entsorgungNeu: -1000,
+    co2KostenNeu: 1000,              // €/t
+    distanzNeu: 200,                 // km
 
     // REMAN
-    remanKosten: 25000,
-    entsorgungReman: 1000,
+    remanKosten: 40000,
+    entsorgungReman: -1000,
     co2KostenReman: 200,             // €/t
-    kostensteigerungJeReman: 3.0,    // PRO REMAN-Zyklus (%)
-    distanzReman: 150,               // km
+    kostensteigerungJeReman: -2.0,   // PRO REMAN-Zyklus (%)
+    distanzReman: 200,               // km
 
     // Zeit & Leistung
     standzeitNeu: 1460,              // Tage
-    leadTimeNeu: 90,                 // Tage
-    zinssatzNeu: 5.0,                // %
-    hubeProStundeNeu: 120,
+    leadTimeNeu: 15,                 // Tage
+    zinssatzNeu: 4.0,                // %
+    hubeProStundeNeu: 50,
 
-    standzeitReman: 1095,            // Tage
-    leadTimeReman: 45,               // Tage
-    zinssatzReman: 4.5,              // %
-    hubeProStundeReman: 115,
+    standzeitReman: 730,             // Tage
+    leadTimeReman: 30,               // Tage
+    zinssatzReman: 5.0,              // %
+    hubeProStundeReman: 30,
 
     // Allgemein
-    analysehorizont: 10,             // Jahre
-    stundenProJahr: 3000,
-    qualitaetsYield: 95,             // %
-    performanceYield: 98,            // %
-    inflation: 2.5,                  // %
-    co2Steigerung: 4.0               // % p.a.
+    analysehorizont: 20,             // Jahre
+    stundenProJahr: 4100,
+    qualitaetsYield: 97,             // %
+    performanceYield: 95,            // %
+    inflation: 2.0,                  // %
+    co2Steigerung: 5.0               // % p.a.
   });
 
   // ===== String-Formzustand (nur Anzeige/Eingabe) =====
@@ -94,7 +94,7 @@ export default function TCODashboard() {
   // Commit: String -> Number (bei Blur/Enter)
   const commitParam = (key) => {
     const raw = (form[key] ?? '').trim();
-    if (raw === '') return; // leer: nichts tun
+    if (raw === '') return;
     const normalized = raw.replace(',', '.');
     const num = Number(normalized);
     setParams(prev => ({ ...prev, [key]: Number.isFinite(num) ? num : 0 }));
@@ -129,7 +129,7 @@ export default function TCODashboard() {
       return value / Math.pow(1 + rate, time);
     };
 
-    // CO2-Transport (hin+zurück), 490 g/km => t
+    // CO₂-Transport (hin+zurück), 490 g/km => t
     const gPerKm = 490;
     const tCo2Neu = (2 * p.distanzNeu * gPerKm) / 1_000_000;
     const tCo2Rem = (2 * p.distanzReman * gPerKm) / 1_000_000;
@@ -147,10 +147,10 @@ export default function TCODashboard() {
 
     const firstReman = remanTimes.length > 0 ? remanTimes[0] : 1e30;
 
-    // Timeline: 0, Jahresenden, (fractionales Endjahr), Events, Produktions-Endpunkte
+    // Timeline immer mit Horizont (VBA-Style)
     const TL = [0];
     for (let j = 1; j <= Math.floor(p.analysehorizont); j++) TL.push(j);
-    if (Math.abs(p.analysehorizont - Math.floor(p.analysehorizont)) > 1e-6) TL.push(p.analysehorizont);
+    TL.push(p.analysehorizont); // <- explizit immer drin
     TL.push(...remanTimes, ...neukaufTimes);
 
     // Produktions-Endpunkte wie in VBA (für Output-Genauigkeit)
@@ -161,7 +161,7 @@ export default function TCODashboard() {
     TL.sort((a, b) => a - b);
     const uniqueTL = [];
     for (let i = 0; i < TL.length; i++) {
-      if (i === 0 || Math.abs(TL[i] - TL[i - 1]) > 1e-6) uniqueTL.push(TL[i]);
+      if (i === 0 || Math.abs(TL[i] - TL[i - 1]) > EPS) uniqueTL.push(TL[i]);
     }
 
     let tcoReman = p.herstellkosten + p.inbetriebnahme;
@@ -178,23 +178,23 @@ export default function TCODashboard() {
       const t1 = uniqueTL[i];
       const t0 = i > 0 ? uniqueTL[i - 1] : 0;
 
-      // OPEX am Jahresende
-      if (Math.abs(t1 - Math.round(t1)) <= 1e-6 && t1 >= 1 - 1e-6 && t1 <= p.analysehorizont + 1e-6) {
-        const discR = t1 < firstReman - 1e-6 ? rNeu : rRem;
+      // OPEX am Jahresende – Diskontsatzwechsel ab erstem REMAN-Event
+      if (Math.abs(t1 - Math.round(t1)) <= EPS && t1 >= 1 - EPS && t1 <= p.analysehorizont + EPS) {
+        const discR = (t1 + EPS < firstReman) ? rNeu : rRem; // <- Fix: Gleichheit auf REMAN-Seite
         tcoReman += pv(p.betriebskosten, discR, t1);
         tcoNeu += pv(p.betriebskosten, rNeu, t1);
       }
 
       // REMAN-Event
-      if (remanTimes.some(rt => Math.abs(rt - t1) <= 1e-6)) {
-        const k = remanTimes.findIndex(rt => Math.abs(rt - t1) <= 1e-6) + 1;
+      if (remanTimes.some(rt => Math.abs(rt - t1) <= EPS)) {
+        const k = remanTimes.findIndex(rt => Math.abs(rt - t1) <= EPS) + 1;
         const mult = 1 + (k - 1) * (p.kostensteigerungJeReman / 100);
         const co2R = tCo2Rem * (p.co2KostenReman * Math.pow(1 + p.co2Steigerung / 100, t1));
         tcoReman += pv(p.remanKosten * mult + co2R, rRem, t1);
       }
 
       // Neukauf-Event
-      if (neukaufTimes.some(nt => Math.abs(nt - t1) <= 1e-6)) {
+      if (neukaufTimes.some(nt => Math.abs(nt - t1) <= EPS)) {
         const co2N = tCo2Neu * (p.co2KostenNeu * Math.pow(1 + p.co2Steigerung / 100, t1));
         tcoNeu += pv(p.entsorgungNeu, rNeu, t1);
         tcoNeu += pv(p.herstellkosten + p.inbetriebnahme + co2N, rNeu, t1);
@@ -202,7 +202,7 @@ export default function TCODashboard() {
 
       // Output-Zeitfenster
       let idxR = -1;
-      for (let j = 0; j < remanTimes.length; j++) if (remanTimes[j] <= t0 + 1e-6) idxR = j;
+      for (let j = 0; j < remanTimes.length; j++) if (remanTimes[j] <= t0 + EPS) idxR = j;
 
       let prodStartR, prodEndR, rateRem;
       if (idxR === -1) {
@@ -215,7 +215,7 @@ export default function TCODashboard() {
       outRem += effProdRem * H * rateRem * q * perf;
 
       let idxN = -1;
-      for (let j = 0; j < neukaufTimes.length; j++) if (neukaufTimes[j] <= t0 + 1e-6) idxN = j;
+      for (let j = 0; j < neukaufTimes.length; j++) if (neukaufTimes[j] <= t0 + EPS) idxN = j;
 
       let prodStartN, prodEndN;
       if (idxN === -1) { prodStartN = 0; prodEndN = standzeitNeuJ; }
@@ -228,25 +228,27 @@ export default function TCODashboard() {
         time: t1,
         tcoReman,
         tcoNeu,
-        costPerOutputReman: outRem > 0 ? (tcoReman / outRem) * 100 : 0, // Cent
+        costPerOutputReman: outRem > 0 ? (tcoReman / outRem) * 100 : 0,
         costPerOutputNeu: outNeu > 0 ? (tcoNeu / outNeu) * 100 : 0
       });
     }
 
-    // Entsorgung am Horizontende
+    // ===== Fix A: Entsorgung IMMER am Horizont buchen (VBA-Style) =====
+    tcoReman += pv(p.entsorgungReman, rRem, p.analysehorizont);
+    tcoNeu   += pv(p.entsorgungNeu,   rNeu, p.analysehorizont);
+
+    // letzten Punkt (falls vorhanden) anpassen, damit Charts/KPIs Endwerte zeigen
     if (data.length) {
       const last = data[data.length - 1];
-      if (Math.abs(last.time - p.analysehorizont) <= 1e-6) {
-        last.tcoReman += pv(p.entsorgungReman, rRem, p.analysehorizont);
-        last.tcoNeu += pv(p.entsorgungNeu, rNeu, p.analysehorizont);
-        last.costPerOutputReman = last.tcoReman / (outRem || 1) * 100;
-        last.costPerOutputNeu   = last.tcoNeu   / (outNeu || 1) * 100;
-      }
+      last.tcoReman = tcoReman;
+      last.tcoNeu = tcoNeu;
+      last.costPerOutputReman = outRem > 0 ? (tcoReman / outRem) * 100 : 0;
+      last.costPerOutputNeu   = outNeu > 0 ? (tcoNeu / outNeu) * 100 : 0;
     }
 
     const finalPoint = data[data.length - 1] || {};
-    const finalTcoReman = finalPoint.tcoReman || 0;
-    const finalTcoNeu = finalPoint.tcoNeu || 0;
+    const finalTcoReman = finalPoint.tcoReman || tcoReman || 0;
+    const finalTcoNeu = finalPoint.tcoNeu || tcoNeu || 0;
     const savings = finalTcoNeu - finalTcoReman;
     const savingsPercent = finalTcoNeu > 0 ? (savings / finalTcoNeu) * 100 : 0;
 
@@ -256,7 +258,7 @@ export default function TCODashboard() {
     const kphDelta = kphReman - kphNeu;
     const kphDeltaPct = kphNeu !== 0 ? (kphDelta / kphNeu) * 100 : 0;
 
-    // Mini-Charts: Werte + Deltas
+    // Mini-Kacheln
     const co2NeuNow = p.co2KostenNeu;
     const co2RemNow = p.co2KostenReman;
     const co2Delta = co2RemNow - co2NeuNow;
@@ -476,7 +478,7 @@ export default function TCODashboard() {
           </div>
         </div>
 
-        {/* Mini-Bar-Charts mit Tooltips und Δ im Titel */}
+        {/* Mini-Bar-Charts */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-sm p-4">
             <div className="flex items-center gap-2 mb-1">
