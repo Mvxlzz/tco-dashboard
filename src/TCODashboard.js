@@ -231,9 +231,9 @@ export default function TCODashboard() {
     hubeProStundeNeu: 80,
 
     standzeitReman: 730,
-    leadTimeReman: 30,
-    zinssatzReman: 5.0,
-    hubeProStundeReman: 30,
+    leadTimeReman: 10,
+    zinssatzReman: 4.0,
+    hubeProStundeReman: 40,
 
     // Allgemein
     analysehorizont: 10,
@@ -241,7 +241,7 @@ export default function TCODashboard() {
     qualitaetsYield: 97,
     performanceYield: 95,
     inflation: 2.0,
-    co2Steigerung: 5.0
+    co2Steigerung: 4.0
   });
 
   // Anzeige-Strings (nur als Quelle für initialValue der Inputs)
