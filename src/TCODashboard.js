@@ -226,7 +226,7 @@ export default function TCODashboard() {
 
     // Zeit & Leistung
     standzeitNeu: 1460,
-    leadTimeNeu: 10,
+    leadTimeNeu: 20,
     zinssatzNeu: 4.0,
     hubeProStundeNeu: 80,
 
