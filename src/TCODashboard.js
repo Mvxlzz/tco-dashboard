@@ -210,25 +210,25 @@ export default function TCODashboard() {
   // Modell-Parameter (werden NUR bei Commit aktualisiert)
   const [params, setParams] = useState({
     // Neuteil
-    herstellkosten: 70000,
-    inbetriebnahme: 30000,
-    betriebskosten: 10000,
-    entsorgungNeu: -1000,
+    herstellkosten: 100000,
+    inbetriebnahme: 25000,
+    betriebskosten: 8000,
+    entsorgungNeu: -2000,
     co2KostenNeu: 1000,
     distanzNeu: 200,
 
     // REMAN
-    remanKosten: 40000,
-    entsorgungReman: -1000,
+    remanKosten: 45000,
+    entsorgungReman: -2000,
     co2KostenReman: 1000,
-    kostensteigerungJeReman: -2.0,
+    kostensteigerungJeReman: 3.0,
     distanzReman: 200,
 
     // Zeit & Leistung
     standzeitNeu: 1460,
-    leadTimeNeu: 15,
+    leadTimeNeu: 10,
     zinssatzNeu: 4.0,
-    hubeProStundeNeu: 50,
+    hubeProStundeNeu: 80,
 
     standzeitReman: 730,
     leadTimeReman: 30,
@@ -236,7 +236,7 @@ export default function TCODashboard() {
     hubeProStundeReman: 30,
 
     // Allgemein
-    analysehorizont: 20,
+    analysehorizont: 10,
     stundenProJahr: 1760,
     qualitaetsYield: 97,
     performanceYield: 95,
